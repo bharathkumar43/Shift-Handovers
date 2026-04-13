@@ -1,0 +1,247 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Users, Plus, ToggleLeft, ToggleRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface UserData {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  createdAt: string;
+}
+
+const ROLES = ["ENGINEER", "LEAD", "ADMIN"];
+
+export default function ManageUsersPage() {
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({ name: "", email: "", password: "", role: "ENGINEER" });
+  const [message, setMessage] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const loadUsers = async () => {
+    const res = await fetch("/api/users");
+    const data = await res.json();
+    setUsers(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const addUser = async () => {
+    if (!formData.name || !formData.email || !formData.password) {
+      setMessage("All fields are required");
+      return;
+    }
+    setAdding(true);
+    const res = await fetch("/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    });
+
+    if (res.ok) {
+      await loadUsers();
+      setFormData({ name: "", email: "", password: "", role: "ENGINEER" });
+      setShowForm(false);
+      setMessage("User added successfully");
+      setTimeout(() => setMessage(""), 3000);
+    } else {
+      const err = await res.json();
+      setMessage(err.error || "Error adding user");
+    }
+    setAdding(false);
+  };
+
+  const toggleUser = async (user: UserData) => {
+    await fetch("/api/users", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: user.id, active: !user.active }),
+    });
+    await loadUsers();
+  };
+
+  const changeRole = async (user: UserData, newRole: string) => {
+    await fetch("/api/users", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: user.id, role: newRole }),
+    });
+    await loadUsers();
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64 text-gray-500">Loading...</div>;
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Users className="w-7 h-7 text-indigo-600" />
+          <h1 className="text-2xl font-bold text-gray-900">Manage Users</h1>
+        </div>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700"
+        >
+          <Plus className="w-4 h-4" />
+          Add User
+        </button>
+      </div>
+
+      {message && (
+        <div
+          className={cn(
+            "mb-4 px-4 py-2 rounded-lg text-sm border",
+            message.includes("Error") || message.includes("required")
+              ? "bg-red-50 text-red-700 border-red-200"
+              : "bg-green-50 text-green-700 border-green-200"
+          )}
+        >
+          {message}
+        </div>
+      )}
+
+      {/* Add User Form */}
+      {showForm && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">New User</h3>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Full Name</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 text-gray-900"
+                placeholder="John Doe"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 text-gray-900"
+                placeholder="john@cloudfuze.com"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Password</label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 text-gray-900"
+                placeholder="Password"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Role</label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 text-gray-900"
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={addUser}
+              disabled={adding}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {adding ? "Adding..." : "Create User"}
+            </button>
+            <button
+              onClick={() => setShowForm(false)}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Users Table */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="text-left px-6 py-3 font-semibold text-gray-700">Name</th>
+              <th className="text-left px-6 py-3 font-semibold text-gray-700">Email</th>
+              <th className="text-left px-6 py-3 font-semibold text-gray-700">Role</th>
+              <th className="text-left px-6 py-3 font-semibold text-gray-700">Status</th>
+              <th className="text-right px-6 py-3 font-semibold text-gray-700">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((user) => (
+              <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <td className="px-6 py-3 font-medium text-gray-900">{user.name}</td>
+                <td className="px-6 py-3 text-gray-600">{user.email}</td>
+                <td className="px-6 py-3">
+                  <select
+                    value={user.role}
+                    onChange={(e) => changeRole(user, e.target.value)}
+                    className="px-2 py-1 border border-gray-200 rounded text-xs focus:ring-2 focus:ring-indigo-500 text-gray-900"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-6 py-3">
+                  <span
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-xs font-medium",
+                      user.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                    )}
+                  >
+                    {user.active ? "Active" : "Inactive"}
+                  </span>
+                </td>
+                <td className="px-6 py-3 text-right">
+                  <button
+                    onClick={() => toggleUser(user)}
+                    className={cn(
+                      "inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors",
+                      user.active ? "text-red-600 hover:bg-red-50" : "text-green-600 hover:bg-green-50"
+                    )}
+                  >
+                    {user.active ? (
+                      <>
+                        <ToggleRight className="w-4 h-4" /> Deactivate
+                      </>
+                    ) : (
+                      <>
+                        <ToggleLeft className="w-4 h-4" /> Activate
+                      </>
+                    )}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  LEAD
+  ENGINEER
+}
+
+enum EntryStatus {
+  COMPLETE
+  IN_PROGRESS
+  PENDING
+  DELTA
+  NA
+}
+
+enum HandoverStatus {
+  DRAFT
+  SUBMITTED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(ENGINEER)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ledShifts       ShiftHandover[] @relation("ShiftLead")
+  submittedShifts ShiftHandover[] @relation("ShiftSubmitter")
+  clientEntries   ClientEntry[]   @relation("EntryEngineer")
+  filledEntries   ClientEntry[]   @relation("EntryFiller")
+}
+
+model Project {
+  id           String  @id @default(cuid())
+  name         String  @unique
+  shift1Timing String
+  shift2Timing String
+  shift3Timing String
+  active       Boolean @default(true)
+
+  clients   Client[]
+  handovers ShiftHandover[]
+}
+
+model Client {
+  id        String  @id @default(cuid())
+  name      String
+  projectId String
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+
+  project Project       @relation(fields: [projectId], references: [id])
+  entries ClientEntry[]
+
+  @@unique([name, projectId])
+}
+
+model ShiftHandover {
+  id            String         @id @default(cuid())
+  date          DateTime       @db.Date
+  projectId     String
+  shiftNumber   Int
+  leadId        String?
+  leadNotes     String?
+  status        HandoverStatus @default(DRAFT)
+  submittedById String?
+  submittedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  project     Project       @relation(fields: [projectId], references: [id])
+  lead        User?         @relation("ShiftLead", fields: [leadId], references: [id])
+  submittedBy User?         @relation("ShiftSubmitter", fields: [submittedById], references: [id])
+  entries     ClientEntry[]
+
+  @@unique([date, projectId, shiftNumber])
+}
+
+model ClientEntry {
+  id              String      @id @default(cuid())
+  shiftHandoverId String
+  clientId        String
+  tickets         String?
+  status          EntryStatus @default(NA)
+  engineerWorked  String?
+  issues          String?
+  updates         String?
+  handoverNotes   String?
+  engineerId      String?
+  filledById      String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  shiftHandover ShiftHandover @relation(fields: [shiftHandoverId], references: [id], onDelete: Cascade)
+  client        Client        @relation(fields: [clientId], references: [id])
+  engineer      User?         @relation("EntryEngineer", fields: [engineerId], references: [id])
+  filledBy      User?         @relation("EntryFiller", fields: [filledById], references: [id])
+
+  @@unique([shiftHandoverId, clientId])
+}
+
+model DailyDashboard {
+  id                 String   @id @default(cuid())
+  date               DateTime @unique @db.Date
+  dutyManager        String?
+  week               String?
+  keyIssues          String?
+  actionsForTomorrow String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

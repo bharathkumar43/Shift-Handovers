@@ -1,0 +1,65 @@
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+export function formatDate(date: Date | string): string {
+  const d = new Date(date);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export function toDateString(date: Date | string): string {
+  const d = new Date(date);
+  return d.toISOString().split("T")[0];
+}
+
+export function getShiftLabel(shiftNumber: number): string {
+  switch (shiftNumber) {
+    case 1:
+      return "Shift 1 (Morning)";
+    case 2:
+      return "Shift 2 (Afternoon)";
+    case 3:
+      return "Shift 3 (Night)";
+    default:
+      return `Shift ${shiftNumber}`;
+  }
+}
+
+export function getStatusColor(status: string): string {
+  switch (status) {
+    case "COMPLETE":
+      return "bg-green-100 text-green-800 border-green-200";
+    case "IN_PROGRESS":
+      return "bg-amber-100 text-amber-800 border-amber-200";
+    case "PENDING":
+      return "bg-red-100 text-red-800 border-red-200";
+    case "DELTA":
+      return "bg-blue-100 text-blue-800 border-blue-200";
+    default:
+      return "bg-gray-100 text-gray-600 border-gray-200";
+  }
+}
+
+export function getStatusLabel(status: string): string {
+  switch (status) {
+    case "COMPLETE":
+      return "Complete";
+    case "IN_PROGRESS":
+      return "In Progress";
+    case "PENDING":
+      return "Pending";
+    case "DELTA":
+      return "Delta";
+    case "NA":
+      return "N/A";
+    default:
+      return status;
+  }
+}
