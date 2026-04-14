@@ -26,6 +26,7 @@ interface HandoverEntry {
   issues: string | null;
   updates: string | null;
   handoverNotes: string | null;
+  managerNotes: string | null;
   createdAt: string;
   updatedAt: string;
   client: { name: string };
@@ -273,7 +274,8 @@ export default function AdminReportsPage() {
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Status</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Issues</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Updates</th>
-                      <th className="text-left px-4 py-2 font-medium text-gray-600">Handover</th>
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Engineer Notes</th>
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Manager Notes</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Next Shift Engineer</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Filled By</th>
                     </tr>
@@ -296,6 +298,9 @@ export default function AdminReportsPage() {
                         </td>
                         <td className="px-4 py-2 text-gray-700 max-w-[200px]">
                           <span className="line-clamp-2">{entry.handoverNotes || "-"}</span>
+                        </td>
+                        <td className="px-4 py-2 text-gray-700 max-w-[200px]">
+                          <span className="line-clamp-2">{entry.managerNotes || "-"}</span>
                         </td>
                         <td className="px-4 py-2 text-gray-600">{entry.engineer?.name || "-"}</td>
                         <td className="px-4 py-2 text-gray-500 text-xs">{entry.filledBy?.name || "-"}</td>
@@ -324,7 +329,8 @@ export default function AdminReportsPage() {
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Status</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Issues</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Updates</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-700">Handover</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700">Engineer Notes</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700">Manager Notes</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Filled By</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Updated At</th>
                 </tr>
@@ -360,6 +366,9 @@ export default function AdminReportsPage() {
                     </td>
                     <td className="px-4 py-2 text-gray-700 max-w-[150px]">
                       <span className="line-clamp-2">{entry.handoverNotes || "-"}</span>
+                    </td>
+                    <td className="px-4 py-2 text-gray-700 max-w-[150px]">
+                      <span className="line-clamp-2">{entry.managerNotes || "-"}</span>
                     </td>
                     <td className="px-4 py-2 text-gray-500 text-xs">{entry.filledBy?.name || "-"}</td>
                     <td className="px-4 py-2 text-gray-400 text-xs whitespace-nowrap">

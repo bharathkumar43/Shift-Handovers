@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from "react";
 import { useSession } from "next-auth/react";
-import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck } from "lucide-react";
 import { cn, getStatusColor, getShiftLabel } from "@/lib/utils";
 
 interface Client {
@@ -24,6 +24,7 @@ interface EntryData {
   issues: string;
   updates: string;
   handoverNotes: string;
+  managerNotes: string;
   engineerId: string;
 }
 
@@ -59,13 +60,19 @@ export default function HandoverFormPage({
   const [projectTiming, setProjectTiming] = useState("");
   const [leadNotes, setLeadNotes] = useState("");
   const [handoverStatus, setHandoverStatus] = useState("DRAFT");
+  const [handoverId, setHandoverId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [previousShiftEntries, setPreviousShiftEntries] = useState<PreviousEntry[]>([]);
   const [showPrevious, setShowPrevious] = useState(false);
+  const [engineerAck, setEngineerAck] = useState<{ acknowledged: boolean; by: string | null; at: string | null }>({ acknowledged: false, by: null, at: null });
+  const [managerAck, setManagerAck] = useState<{ acknowledged: boolean; by: string | null; at: string | null }>({ acknowledged: false, by: null, at: null });
+  const [acknowledging, setAcknowledging] = useState(false);
 
   const userRole = (session?.user as { role?: string })?.role;
+  const isAdmin = userRole === "ADMIN";
+  const isLead = userRole === "LEAD";
   const canSubmit = userRole === "ADMIN" || userRole === "LEAD";
 
   useEffect(() => {
@@ -101,6 +108,7 @@ export default function HandoverFormPage({
             issues: existing?.issues || "",
             updates: existing?.updates || "",
             handoverNotes: existing?.handoverNotes || "",
+            managerNotes: existing?.managerNotes || "",
             engineerId: existing?.engineerId || "",
           };
         });
@@ -109,10 +117,20 @@ export default function HandoverFormPage({
         if (handoverData) {
           setLeadNotes(handoverData.leadNotes || "");
           setHandoverStatus(handoverData.status || "DRAFT");
+          setHandoverId(handoverData.id || null);
+          setEngineerAck({
+            acknowledged: handoverData.engineerAcknowledged || false,
+            by: handoverData.engineerAcknowledger?.name || null,
+            at: handoverData.engineerAcknowledgedAt || null,
+          });
+          setManagerAck({
+            acknowledged: handoverData.managerAcknowledged || false,
+            by: handoverData.managerAcknowledger?.name || null,
+            at: handoverData.managerAcknowledgedAt || null,
+          });
         }
       }
 
-      // Load previous shift data
       const prevShift = parseInt(shift) - 1;
       if (prevShift >= 1) {
         const prevRes = await fetch(
@@ -164,9 +182,23 @@ export default function HandoverFormPage({
       });
 
       if (res.ok) {
+        const result = await res.json();
         if (submit) {
           setHandoverStatus("SUBMITTED");
         }
+        if (result.id) {
+          setHandoverId(result.id);
+        }
+        setEngineerAck({
+          acknowledged: result.engineerAcknowledged || false,
+          by: result.engineerAcknowledger?.name || null,
+          at: result.engineerAcknowledgedAt || null,
+        });
+        setManagerAck({
+          acknowledged: result.managerAcknowledged || false,
+          by: result.managerAcknowledger?.name || null,
+          at: result.managerAcknowledgedAt || null,
+        });
         setSaveMessage(submit ? "Submitted successfully!" : "Saved as draft");
         setTimeout(() => setSaveMessage(""), 3000);
       } else {
@@ -178,6 +210,48 @@ export default function HandoverFormPage({
     }
 
     setSaving(false);
+  };
+
+  const handleAcknowledge = async (action: "engineer_acknowledge" | "manager_acknowledge") => {
+    if (!handoverId) {
+      setSaveMessage("Please save the handover first before acknowledging.");
+      setTimeout(() => setSaveMessage(""), 3000);
+      return;
+    }
+
+    setAcknowledging(true);
+    try {
+      const res = await fetch("/api/handover", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handoverId, action }),
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        if (action === "engineer_acknowledge") {
+          setEngineerAck({
+            acknowledged: true,
+            by: result.engineerAcknowledger?.name || session?.user?.name || null,
+            at: new Date().toISOString(),
+          });
+        } else {
+          setManagerAck({
+            acknowledged: true,
+            by: result.managerAcknowledger?.name || session?.user?.name || null,
+            at: new Date().toISOString(),
+          });
+        }
+        setSaveMessage("Acknowledged successfully!");
+        setTimeout(() => setSaveMessage(""), 3000);
+      } else {
+        const errorData = await res.json().catch(() => null);
+        setSaveMessage(errorData?.error || "Error acknowledging.");
+      }
+    } catch {
+      setSaveMessage("Error acknowledging. Please try again.");
+    }
+    setAcknowledging(false);
   };
 
   if (loading) {
@@ -194,8 +268,19 @@ export default function HandoverFormPage({
   const totalCount = entries.length;
   const allEntriesFilled = totalCount > 0 && filledCount === totalCount;
 
+  const formatAckTime = (iso: string | null) => {
+    if (!iso) return "";
+    return new Date(iso).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-6">
+    <div className="max-w-[1600px] mx-auto px-4 py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -289,7 +374,7 @@ export default function HandoverFormPage({
         </div>
       )}
 
-      {/* Previous Shift Handover Notes */}
+      {/* Previous Shift Notes */}
       {previousShiftEntries.length > 0 && (
         <div className="mb-4">
           <button
@@ -297,7 +382,7 @@ export default function HandoverFormPage({
             className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700"
           >
             {showPrevious ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            Previous Shift Handover Notes ({previousShiftEntries.length} items)
+            Previous Shift Engineer Notes ({previousShiftEntries.length} items)
           </button>
           {showPrevious && (
             <div className="mt-2 bg-indigo-50 rounded-lg border border-indigo-100 p-4 space-y-2">
@@ -326,7 +411,8 @@ export default function HandoverFormPage({
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 w-[130px]">Engineer Worked</th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[180px]">Issues</th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[180px]">Updates</th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[180px]">Handover</th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[180px]">Engineer Notes</th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[180px]">Manager Notes</th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 w-[150px]">Next Shift Engineer</th>
               </tr>
             </thead>
@@ -419,7 +505,22 @@ export default function HandoverFormPage({
                         disabled={isSubmitted}
                         rows={1}
                         className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 resize-y text-gray-900"
-                        placeholder="Handover notes..."
+                        placeholder="Engineer notes..."
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <textarea
+                        value={entry.managerNotes}
+                        onChange={(e) => updateEntry(entry.clientId, "managerNotes", e.target.value)}
+                        disabled={!isAdmin}
+                        rows={1}
+                        className={cn(
+                          "w-full px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 resize-y text-gray-900",
+                          isAdmin
+                            ? "border-purple-200 bg-purple-50/30 focus:border-purple-500 focus:ring-purple-500"
+                            : "border-gray-200 bg-gray-100 cursor-not-allowed"
+                        )}
+                        placeholder={isAdmin ? "Manager notes..." : "Manager only"}
                       />
                     </td>
                     <td className="px-3 py-2">
@@ -459,6 +560,118 @@ export default function HandoverFormPage({
           placeholder="Notes from the shift lead..."
         />
       </div>
+
+      {/* Acknowledgement Section */}
+      {(() => {
+        const engineerNotesFilled = totalCount > 0 && entries.every((e) => !!e.handoverNotes);
+        const managerNotesFilled = totalCount > 0 && entries.every((e) => !!e.managerNotes);
+        const engineerNotesFilledCount = entries.filter((e) => !!e.handoverNotes).length;
+        const managerNotesFilledCount = entries.filter((e) => !!e.managerNotes).length;
+
+        return (
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Engineer Acknowledgement - only Leads can acknowledge */}
+            <div className={cn(
+              "rounded-xl shadow-sm border p-5",
+              engineerAck.acknowledged
+                ? "bg-green-50 border-green-200"
+                : "bg-white border-gray-200"
+            )}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-blue-600" />
+                    Engineer Acknowledgement
+                  </h3>
+                  {engineerAck.acknowledged ? (
+                    <p className="text-xs text-green-700 mt-1">
+                      Acknowledged by <span className="font-medium">{engineerAck.by}</span> on {formatAckTime(engineerAck.at)}
+                    </p>
+                  ) : isLead ? (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {engineerNotesFilled
+                        ? "All engineer notes filled. Ready to acknowledge."
+                        : `${engineerNotesFilledCount}/${totalCount} engineer notes filled. All must be filled to acknowledge.`}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">Only Shift Leads can acknowledge</p>
+                  )}
+                </div>
+                {engineerAck.acknowledged ? (
+                  <div className="flex items-center gap-1.5 text-green-600">
+                    <CheckCircle className="w-5 h-5" />
+                  </div>
+                ) : isLead && handoverId ? (
+                  <button
+                    onClick={() => handleAcknowledge("engineer_acknowledge")}
+                    disabled={acknowledging || !engineerNotesFilled}
+                    title={!engineerNotesFilled ? "All engineer notes must be filled first" : "Acknowledge engineer notes"}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50",
+                      engineerNotesFilled
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    )}
+                  >
+                    {acknowledging ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                    Acknowledge
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Manager Acknowledgement - only Admins can acknowledge */}
+            <div className={cn(
+              "rounded-xl shadow-sm border p-5",
+              managerAck.acknowledged
+                ? "bg-green-50 border-green-200"
+                : "bg-white border-gray-200"
+            )}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-purple-600" />
+                    Manager Acknowledgement
+                  </h3>
+                  {managerAck.acknowledged ? (
+                    <p className="text-xs text-green-700 mt-1">
+                      Acknowledged by <span className="font-medium">{managerAck.by}</span> on {formatAckTime(managerAck.at)}
+                    </p>
+                  ) : isAdmin ? (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {managerNotesFilled
+                        ? "All manager notes filled. Ready to acknowledge."
+                        : `${managerNotesFilledCount}/${totalCount} manager notes filled. All must be filled to acknowledge.`}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">Only Managers can acknowledge</p>
+                  )}
+                </div>
+                {managerAck.acknowledged ? (
+                  <div className="flex items-center gap-1.5 text-green-600">
+                    <CheckCircle className="w-5 h-5" />
+                  </div>
+                ) : isAdmin && handoverId ? (
+                  <button
+                    onClick={() => handleAcknowledge("manager_acknowledge")}
+                    disabled={acknowledging || !managerNotesFilled}
+                    title={!managerNotesFilled ? "All manager notes must be filled first" : "Acknowledge manager notes"}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50",
+                      managerNotesFilled
+                        ? "bg-purple-600 text-white hover:bg-purple-700"
+                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    )}
+                  >
+                    {acknowledging ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                    Acknowledge
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Bottom Save/Submit */}
       {!isSubmitted && (

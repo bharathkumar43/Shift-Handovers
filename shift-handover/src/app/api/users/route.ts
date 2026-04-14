@@ -96,3 +96,38 @@ export async function PUT(req: NextRequest) {
 
   return NextResponse.json(user);
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json({ error: "User ID required" }, { status: 400 });
+  }
+
+  if (id === session.user.id) {
+    return NextResponse.json({ error: "You cannot delete yourself" }, { status: 400 });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  await prisma.$transaction([
+    prisma.shiftHandover.updateMany({ where: { leadId: id }, data: { leadId: null } }),
+    prisma.shiftHandover.updateMany({ where: { submittedById: id }, data: { submittedById: null } }),
+    prisma.shiftHandover.updateMany({ where: { engineerAcknowledgedById: id }, data: { engineerAcknowledgedById: null, engineerAcknowledged: false, engineerAcknowledgedAt: null } }),
+    prisma.shiftHandover.updateMany({ where: { managerAcknowledgedById: id }, data: { managerAcknowledgedById: null, managerAcknowledged: false, managerAcknowledgedAt: null } }),
+    prisma.clientEntry.updateMany({ where: { engineerId: id }, data: { engineerId: null } }),
+    prisma.clientEntry.updateMany({ where: { filledById: id }, data: { filledById: null } }),
+    prisma.user.delete({ where: { id } }),
+  ]);
+
+  return NextResponse.json({ success: true });
+}

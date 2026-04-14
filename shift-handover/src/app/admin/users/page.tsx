@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Plus, ToggleLeft, ToggleRight } from "lucide-react";
+import { Users, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UserData {
@@ -22,6 +22,7 @@ export default function ManageUsersPage() {
   const [formData, setFormData] = useState({ name: "", email: "", password: "", role: "ENGINEER" });
   const [message, setMessage] = useState("");
   const [adding, setAdding] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const loadUsers = async () => {
     const res = await fetch("/api/users");
@@ -75,6 +76,19 @@ export default function ManageUsersPage() {
       body: JSON.stringify({ id: user.id, role: newRole }),
     });
     await loadUsers();
+  };
+
+  const deleteUser = async (user: UserData) => {
+    const res = await fetch(`/api/users?id=${user.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setMessage(`User "${user.name}" has been deleted`);
+      setTimeout(() => setMessage(""), 3000);
+      await loadUsers();
+    } else {
+      const err = await res.json();
+      setMessage(err.error || "Error deleting user");
+    }
+    setDeleteConfirm(null);
   };
 
   if (loading) {
@@ -219,23 +233,48 @@ export default function ManageUsersPage() {
                   </span>
                 </td>
                 <td className="px-6 py-3 text-right">
-                  <button
-                    onClick={() => toggleUser(user)}
-                    className={cn(
-                      "inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors",
-                      user.active ? "text-red-600 hover:bg-red-50" : "text-green-600 hover:bg-green-50"
-                    )}
-                  >
-                    {user.active ? (
-                      <>
-                        <ToggleRight className="w-4 h-4" /> Deactivate
-                      </>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => toggleUser(user)}
+                      className={cn(
+                        "inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors",
+                        user.active ? "text-amber-600 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"
+                      )}
+                    >
+                      {user.active ? (
+                        <>
+                          <ToggleRight className="w-4 h-4" /> Deactivate
+                        </>
+                      ) : (
+                        <>
+                          <ToggleLeft className="w-4 h-4" /> Activate
+                        </>
+                      )}
+                    </button>
+                    {deleteConfirm === user.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => deleteUser(user)}
+                          className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm(null)}
+                          className="inline-flex items-center text-xs font-medium px-2 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     ) : (
-                      <>
-                        <ToggleLeft className="w-4 h-4" /> Activate
-                      </>
+                      <button
+                        onClick={() => setDeleteConfirm(user.id)}
+                        className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
                     )}
-                  </button>
+                  </div>
                 </td>
               </tr>
             ))}

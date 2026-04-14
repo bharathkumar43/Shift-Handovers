@@ -18,6 +18,7 @@ interface HandoverEntry {
   issues: string | null;
   updates: string | null;
   handoverNotes: string | null;
+  managerNotes: string | null;
   engineer: { name: string } | null;
   filledBy: { name: string } | null;
 }
@@ -202,7 +203,8 @@ export default function HistoryPage() {
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Status</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Issues</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Updates</th>
-                        <th className="text-left px-3 py-2 font-medium text-gray-600">Handover</th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-600">Engineer Notes</th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-600">Manager Notes</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Next Shift Engineer</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Filled By</th>
                       </tr>
@@ -222,6 +224,7 @@ export default function HistoryPage() {
                             <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate">{entry.issues || "-"}</td>
                             <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate">{entry.updates || "-"}</td>
                             <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate">{entry.handoverNotes || "-"}</td>
+                            <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate">{entry.managerNotes || "-"}</td>
                             <td className="px-3 py-2 text-gray-600">{entry.engineer?.name || "-"}</td>
                             <td className="px-3 py-2 text-gray-500 text-xs">{entry.filledBy?.name || "-"}</td>
                           </tr>

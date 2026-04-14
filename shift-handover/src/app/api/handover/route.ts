@@ -34,6 +34,8 @@ export async function GET(req: NextRequest) {
       },
       lead: { select: { id: true, name: true } },
       submittedBy: { select: { id: true, name: true } },
+      engineerAcknowledger: { select: { id: true, name: true } },
+      managerAcknowledger: { select: { id: true, name: true } },
     },
   });
 
@@ -99,25 +101,33 @@ export async function POST(req: NextRequest) {
   });
 
   if (entries && Array.isArray(entries)) {
-    // Fetch all existing entries for this handover to preserve original filledById
     const existingEntries = await prisma.clientEntry.findMany({
       where: { shiftHandoverId: handover.id },
-      select: { clientId: true, filledById: true },
+      select: { clientId: true, filledById: true, handoverNotes: true, managerNotes: true },
     });
     const existingByClient = new Map(
-      existingEntries.map((e) => [e.clientId, e.filledById])
+      existingEntries.map((e) => [e.clientId, e])
     );
+
+    let engineerNotesChanged = false;
+    let managerNotesChanged = false;
 
     for (const entry of entries) {
       if (!entry.clientId) continue;
 
-      const existingFiller = existingByClient.get(entry.clientId);
+      const existing = existingByClient.get(entry.clientId);
+      const existingFiller = existing?.filledById || null;
       const incomingHasData = entryHasData(entry);
 
-      // Determine who should be recorded as the filler:
-      // - If an existing entry already has a filledById, keep it (don't overwrite)
-      // - If no existing filler and the incoming entry has data, set current user
-      // - If no data at all, leave null
+      if (existing) {
+        if ((entry.handoverNotes || null) !== (existing.handoverNotes || null)) {
+          engineerNotesChanged = true;
+        }
+        if ((entry.managerNotes || null) !== (existing.managerNotes || null)) {
+          managerNotesChanged = true;
+        }
+      }
+
       let filledById: string | null;
       if (existingFiller) {
         filledById = existingFiller;
@@ -141,6 +151,7 @@ export async function POST(req: NextRequest) {
           issues: entry.issues || null,
           updates: entry.updates || null,
           handoverNotes: entry.handoverNotes || null,
+          managerNotes: entry.managerNotes || null,
           engineerId: entry.engineerId || null,
           filledById,
         },
@@ -153,9 +164,29 @@ export async function POST(req: NextRequest) {
           issues: entry.issues || null,
           updates: entry.updates || null,
           handoverNotes: entry.handoverNotes || null,
+          managerNotes: entry.managerNotes || null,
           engineerId: entry.engineerId || null,
           filledById,
         },
+      });
+    }
+
+    // Reset acknowledgements when their respective notes change
+    const ackReset: Record<string, unknown> = {};
+    if (engineerNotesChanged && handover.engineerAcknowledged) {
+      ackReset.engineerAcknowledged = false;
+      ackReset.engineerAcknowledgedById = null;
+      ackReset.engineerAcknowledgedAt = null;
+    }
+    if (managerNotesChanged && handover.managerAcknowledged) {
+      ackReset.managerAcknowledged = false;
+      ackReset.managerAcknowledgedById = null;
+      ackReset.managerAcknowledgedAt = null;
+    }
+    if (Object.keys(ackReset).length > 0) {
+      await prisma.shiftHandover.update({
+        where: { id: handover.id },
+        data: ackReset,
       });
     }
   }
@@ -170,6 +201,84 @@ export async function POST(req: NextRequest) {
           filledBy: { select: { id: true, name: true } },
         },
       },
+      engineerAcknowledger: { select: { id: true, name: true } },
+      managerAcknowledger: { select: { id: true, name: true } },
+    },
+  });
+
+  return NextResponse.json(result);
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json();
+  const { handoverId, action } = body;
+
+  if (!handoverId || !action) {
+    return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+  }
+
+  const handover = await prisma.shiftHandover.findUnique({
+    where: { id: handoverId },
+    include: { entries: true },
+  });
+
+  if (!handover) {
+    return NextResponse.json({ error: "Handover not found" }, { status: 404 });
+  }
+
+  if (action === "engineer_acknowledge") {
+    if (session.user.role !== "LEAD") {
+      return NextResponse.json({ error: "Only Shift Leads can acknowledge engineer notes" }, { status: 403 });
+    }
+    const allEngineerNotesFilled = handover.entries.length > 0 &&
+      handover.entries.every((e) => !!e.handoverNotes);
+    if (!allEngineerNotesFilled) {
+      return NextResponse.json({ error: "All engineer notes must be filled before acknowledging" }, { status: 400 });
+    }
+    await prisma.shiftHandover.update({
+      where: { id: handoverId },
+      data: {
+        engineerAcknowledged: true,
+        engineerAcknowledgedById: session.user.id,
+        engineerAcknowledgedAt: new Date(),
+      },
+    });
+  } else if (action === "manager_acknowledge") {
+    if (session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only managers/admins can acknowledge manager notes" }, { status: 403 });
+    }
+    const allManagerNotesFilled = handover.entries.length > 0 &&
+      handover.entries.every((e) => !!e.managerNotes);
+    if (!allManagerNotesFilled) {
+      return NextResponse.json({ error: "All manager notes must be filled before acknowledging" }, { status: 400 });
+    }
+    await prisma.shiftHandover.update({
+      where: { id: handoverId },
+      data: {
+        managerAcknowledged: true,
+        managerAcknowledgedById: session.user.id,
+        managerAcknowledgedAt: new Date(),
+      },
+    });
+  } else {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+  }
+
+  const result = await prisma.shiftHandover.findUnique({
+    where: { id: handoverId },
+    include: {
+      entries: {
+        include: {
+          client: true,
+          engineer: { select: { id: true, name: true } },
+          filledBy: { select: { id: true, name: true } },
+        },
+      },
+      engineerAcknowledger: { select: { id: true, name: true } },
+      managerAcknowledger: { select: { id: true, name: true } },
     },
   });
 

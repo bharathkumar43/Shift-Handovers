@@ -36,10 +36,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ledShifts       ShiftHandover[] @relation("ShiftLead")
-  submittedShifts ShiftHandover[] @relation("ShiftSubmitter")
-  clientEntries   ClientEntry[]   @relation("EntryEngineer")
-  filledEntries   ClientEntry[]   @relation("EntryFiller")
+  ledShifts              ShiftHandover[] @relation("ShiftLead")
+  submittedShifts        ShiftHandover[] @relation("ShiftSubmitter")
+  engineerAcknowledged   ShiftHandover[] @relation("EngineerAcknowledger")
+  managerAcknowledged    ShiftHandover[] @relation("ManagerAcknowledger")
+  clientEntries          ClientEntry[]   @relation("EntryEngineer")
+  filledEntries          ClientEntry[]   @relation("EntryFiller")
 }
 
 model Project {
@@ -68,22 +70,30 @@ model Client {
 }
 
 model ShiftHandover {
-  id            String         @id @default(cuid())
-  date          DateTime       @db.Date
-  projectId     String
-  shiftNumber   Int
-  leadId        String?
-  leadNotes     String?
-  status        HandoverStatus @default(DRAFT)
-  submittedById String?
-  submittedAt   DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id                       String         @id @default(cuid())
+  date                     DateTime       @db.Date
+  projectId                String
+  shiftNumber              Int
+  leadId                   String?
+  leadNotes                String?
+  status                   HandoverStatus @default(DRAFT)
+  submittedById            String?
+  submittedAt              DateTime?
+  engineerAcknowledged     Boolean        @default(false)
+  engineerAcknowledgedById String?
+  engineerAcknowledgedAt   DateTime?
+  managerAcknowledged      Boolean        @default(false)
+  managerAcknowledgedById  String?
+  managerAcknowledgedAt    DateTime?
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
 
-  project     Project       @relation(fields: [projectId], references: [id])
-  lead        User?         @relation("ShiftLead", fields: [leadId], references: [id])
-  submittedBy User?         @relation("ShiftSubmitter", fields: [submittedById], references: [id])
-  entries     ClientEntry[]
+  project              Project       @relation(fields: [projectId], references: [id])
+  lead                 User?         @relation("ShiftLead", fields: [leadId], references: [id])
+  submittedBy          User?         @relation("ShiftSubmitter", fields: [submittedById], references: [id])
+  engineerAcknowledger User?         @relation("EngineerAcknowledger", fields: [engineerAcknowledgedById], references: [id])
+  managerAcknowledger  User?         @relation("ManagerAcknowledger", fields: [managerAcknowledgedById], references: [id])
+  entries              ClientEntry[]
 
   @@unique([date, projectId, shiftNumber])
 }
@@ -98,6 +108,7 @@ model ClientEntry {
   issues          String?
   updates         String?
   handoverNotes   String?
+  managerNotes    String?
   engineerId      String?
   filledById      String?
   createdAt       DateTime    @default(now())
