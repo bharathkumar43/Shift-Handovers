@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Plus, Save, ToggleLeft, ToggleRight } from "lucide-react";
+import { Settings, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Project {
@@ -26,6 +26,7 @@ export default function ManageClientsPage() {
   const [newClientName, setNewClientName] = useState("");
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/projects")
@@ -78,6 +79,19 @@ export default function ManageClientsPage() {
     }
   };
 
+  const deleteClient = async (client: Client) => {
+    const res = await fetch(`/api/clients?id=${client.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setClients((prev) => prev.filter((c) => c.id !== client.id));
+      setMessage(`Client "${client.name}" has been deleted`);
+      setTimeout(() => setMessage(""), 3000);
+    } else {
+      const err = await res.json();
+      setMessage(err.error || "Error deleting client");
+    }
+    setDeleteConfirm(null);
+  };
+
   const filteredClients = clients.filter((c) => c.projectId === selectedProject);
 
   if (loading) {
@@ -110,7 +124,14 @@ export default function ManageClientsPage() {
       </div>
 
       {message && (
-        <div className="mb-4 px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm border border-green-200">
+        <div
+          className={cn(
+            "mb-4 px-4 py-2 rounded-lg text-sm border",
+            /error|forbidden/i.test(message)
+              ? "bg-red-50 text-red-700 border-red-200"
+              : "bg-green-50 text-green-700 border-green-200"
+          )}
+        >
           {message}
         </div>
       )}
@@ -138,6 +159,9 @@ export default function ManageClientsPage() {
       </div>
 
       {/* Clients List */}
+      <p className="text-xs text-gray-500 mb-2">
+        Deactivate hides the client from new handovers. Delete permanently removes the client and its entries from all handovers.
+      </p>
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -166,25 +190,54 @@ export default function ManageClientsPage() {
                   </span>
                 </td>
                 <td className="px-6 py-3 text-right">
-                  <button
-                    onClick={() => toggleClient(client)}
-                    className={cn(
-                      "inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors",
-                      client.active
-                        ? "text-red-600 hover:bg-red-50"
-                        : "text-green-600 hover:bg-green-50"
-                    )}
-                  >
-                    {client.active ? (
-                      <>
-                        <ToggleRight className="w-4 h-4" /> Deactivate
-                      </>
+                  <div className="flex items-center justify-end gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => toggleClient(client)}
+                      className={cn(
+                        "inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors",
+                        client.active
+                          ? "text-amber-600 hover:bg-amber-50"
+                          : "text-green-600 hover:bg-green-50"
+                      )}
+                    >
+                      {client.active ? (
+                        <>
+                          <ToggleRight className="w-4 h-4" /> Deactivate
+                        </>
+                      ) : (
+                        <>
+                          <ToggleLeft className="w-4 h-4" /> Activate
+                        </>
+                      )}
+                    </button>
+                    {deleteConfirm === client.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => deleteClient(client)}
+                          className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirm(null)}
+                          className="inline-flex items-center text-xs font-medium px-2 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     ) : (
-                      <>
-                        <ToggleLeft className="w-4 h-4" /> Activate
-                      </>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirm(client.id)}
+                        className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
                     )}
-                  </button>
+                  </div>
                 </td>
               </tr>
             ))}

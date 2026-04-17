@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
           include: {
             client: true,
             engineer: { select: { id: true, name: true } },
+            engineerWorkedBy: { select: { id: true, name: true } },
             filledBy: { select: { id: true, name: true } },
           },
         },
@@ -57,6 +58,7 @@ export async function GET(req: NextRequest) {
           },
         },
         engineer: { select: { id: true, name: true } },
+        engineerWorkedBy: { select: { id: true, name: true } },
         filledBy: { select: { id: true, name: true } },
       },
       orderBy: { updatedAt: "desc" },
@@ -85,6 +87,7 @@ export async function GET(req: NextRequest) {
           },
         },
         engineer: { select: { id: true, name: true } },
+        engineerWorkedBy: { select: { id: true, name: true } },
         filledBy: { select: { id: true, name: true } },
       },
       orderBy: { shiftHandover: { date: "desc" } },

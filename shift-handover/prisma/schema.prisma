@@ -33,6 +33,8 @@ model User {
   password  String
   role      Role     @default(ENGINEER)
   active    Boolean  @default(true)
+  /// Shift numbers 1–3. Empty = eligible for all shifts.
+  assignedShifts         Int[]           @default([])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -41,6 +43,7 @@ model User {
   engineerAcknowledged   ShiftHandover[] @relation("EngineerAcknowledger")
   managerAcknowledged    ShiftHandover[] @relation("ManagerAcknowledger")
   clientEntries          ClientEntry[]   @relation("EntryEngineer")
+  workedEntries          ClientEntry[]   @relation("EntryEngineerWorked")
   filledEntries          ClientEntry[]   @relation("EntryFiller")
 }
 
@@ -104,20 +107,22 @@ model ClientEntry {
   clientId        String
   tickets         String?
   status          EntryStatus @default(NA)
-  engineerWorked  String?
-  issues          String?
-  updates         String?
-  handoverNotes   String?
-  managerNotes    String?
-  engineerId      String?
-  filledById      String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  engineerWorked       String?
+  engineerWorkedUserId String?
+  issues                 String?
+  updates                String?
+  handoverNotes          String?
+  managerNotes           String?
+  engineerId             String?
+  filledById             String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
-  shiftHandover ShiftHandover @relation(fields: [shiftHandoverId], references: [id], onDelete: Cascade)
-  client        Client        @relation(fields: [clientId], references: [id])
-  engineer      User?         @relation("EntryEngineer", fields: [engineerId], references: [id])
-  filledBy      User?         @relation("EntryFiller", fields: [filledById], references: [id])
+  shiftHandover    ShiftHandover @relation(fields: [shiftHandoverId], references: [id], onDelete: Cascade)
+  client           Client        @relation(fields: [clientId], references: [id])
+  engineer         User?         @relation("EntryEngineer", fields: [engineerId], references: [id])
+  engineerWorkedBy User?         @relation("EntryEngineerWorked", fields: [engineerWorkedUserId], references: [id])
+  filledBy         User?         @relation("EntryFiller", fields: [filledById], references: [id])
 
   @@unique([shiftHandoverId, clientId])
 }

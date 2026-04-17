@@ -76,3 +76,24 @@ export async function PUT(req: NextRequest) {
 
   return NextResponse.json(client);
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json({ error: "Client ID required" }, { status: 400 });
+  }
+
+  await prisma.$transaction([
+    prisma.clientEntry.deleteMany({ where: { clientId: id } }),
+    prisma.client.delete({ where: { id } }),
+  ]);
+
+  return NextResponse.json({ success: true });
+}

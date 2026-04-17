@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
         include: {
           client: true,
           engineer: { select: { id: true, name: true } },
+          engineerWorkedBy: { select: { id: true, name: true } },
           filledBy: { select: { id: true, name: true } },
         },
       },
@@ -46,6 +47,7 @@ function entryHasData(entry: {
   tickets?: string | null;
   status?: string | null;
   engineerWorked?: string | null;
+  engineerWorkedUserId?: string | null;
   issues?: string | null;
   updates?: string | null;
   handoverNotes?: string | null;
@@ -54,6 +56,7 @@ function entryHasData(entry: {
     (entry.status && entry.status !== "NA") ||
     entry.tickets ||
     entry.engineerWorked ||
+    entry.engineerWorkedUserId ||
     entry.issues ||
     entry.updates ||
     entry.handoverNotes
@@ -147,7 +150,9 @@ export async function POST(req: NextRequest) {
         update: {
           tickets: entry.tickets || null,
           status: entry.status || "NA",
-          engineerWorked: entry.engineerWorked || null,
+          engineerWorkedUserId: entry.engineerWorkedUserId || null,
+          engineerWorked:
+            entry.engineerWorkedUserId ? null : entry.engineerWorked?.trim() || null,
           issues: entry.issues || null,
           updates: entry.updates || null,
           handoverNotes: entry.handoverNotes || null,
@@ -160,7 +165,9 @@ export async function POST(req: NextRequest) {
           clientId: entry.clientId,
           tickets: entry.tickets || null,
           status: entry.status || "NA",
-          engineerWorked: entry.engineerWorked || null,
+          engineerWorkedUserId: entry.engineerWorkedUserId || null,
+          engineerWorked:
+            entry.engineerWorkedUserId ? null : entry.engineerWorked?.trim() || null,
           issues: entry.issues || null,
           updates: entry.updates || null,
           handoverNotes: entry.handoverNotes || null,
@@ -198,6 +205,7 @@ export async function POST(req: NextRequest) {
         include: {
           client: true,
           engineer: { select: { id: true, name: true } },
+          engineerWorkedBy: { select: { id: true, name: true } },
           filledBy: { select: { id: true, name: true } },
         },
       },
@@ -230,8 +238,11 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (action === "engineer_acknowledge") {
-    if (session.user.role !== "LEAD") {
-      return NextResponse.json({ error: "Only Shift Leads can acknowledge engineer notes" }, { status: 403 });
+    if (session.user.role !== "LEAD" && session.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Only Shift Leads and Admins can acknowledge engineer notes" },
+        { status: 403 }
+      );
     }
     const allEngineerNotesFilled = handover.entries.length > 0 &&
       handover.entries.every((e) => !!e.handoverNotes);
@@ -274,6 +285,7 @@ export async function PATCH(req: NextRequest) {
         include: {
           client: true,
           engineer: { select: { id: true, name: true } },
+          engineerWorkedBy: { select: { id: true, name: true } },
           filledBy: { select: { id: true, name: true } },
         },
       },

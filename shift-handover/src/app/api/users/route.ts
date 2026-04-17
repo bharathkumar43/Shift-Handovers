@@ -15,6 +15,7 @@ export async function GET() {
       email: true,
       role: true,
       active: true,
+      assignedShifts: true,
       createdAt: true,
     },
     orderBy: { name: "asc" },
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, email, password, role } = body;
+  const { name, email, password, role, assignedShifts } = body;
 
   if (!name || !email || !password) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -43,12 +44,18 @@ export async function POST(req: NextRequest) {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  const shifts =
+    Array.isArray(assignedShifts) && assignedShifts.length > 0
+      ? [...new Set(assignedShifts.map((n: number) => parseInt(String(n), 10)))].filter((n) => n >= 1 && n <= 3)
+      : [];
+
   const user = await prisma.user.create({
     data: {
       name,
       email,
       password: hashedPassword,
       role: role || "ENGINEER",
+      assignedShifts: shifts,
     },
     select: {
       id: true,
@@ -56,6 +63,7 @@ export async function POST(req: NextRequest) {
       email: true,
       role: true,
       active: true,
+      assignedShifts: true,
     },
   });
 
@@ -69,7 +77,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, name, email, role, active, password } = body;
+  const { id, name, email, role, active, password, assignedShifts } = body;
 
   if (!id) {
     return NextResponse.json({ error: "User ID required" }, { status: 400 });
@@ -81,6 +89,12 @@ export async function PUT(req: NextRequest) {
   if (role !== undefined) updateData.role = role;
   if (active !== undefined) updateData.active = active;
   if (password) updateData.password = await bcrypt.hash(password, 10);
+  if (assignedShifts !== undefined) {
+    const shifts = Array.isArray(assignedShifts)
+      ? [...new Set(assignedShifts.map((n: number) => parseInt(String(n), 10)))].filter((n) => n >= 1 && n <= 3)
+      : [];
+    updateData.assignedShifts = shifts;
+  }
 
   const user = await prisma.user.update({
     where: { id },
@@ -91,6 +105,7 @@ export async function PUT(req: NextRequest) {
       email: true,
       role: true,
       active: true,
+      assignedShifts: true,
     },
   });
 
@@ -125,6 +140,7 @@ export async function DELETE(req: NextRequest) {
     prisma.shiftHandover.updateMany({ where: { engineerAcknowledgedById: id }, data: { engineerAcknowledgedById: null, engineerAcknowledged: false, engineerAcknowledgedAt: null } }),
     prisma.shiftHandover.updateMany({ where: { managerAcknowledgedById: id }, data: { managerAcknowledgedById: null, managerAcknowledged: false, managerAcknowledgedAt: null } }),
     prisma.clientEntry.updateMany({ where: { engineerId: id }, data: { engineerId: null } }),
+    prisma.clientEntry.updateMany({ where: { engineerWorkedUserId: id }, data: { engineerWorkedUserId: null } }),
     prisma.clientEntry.updateMany({ where: { filledById: id }, data: { filledById: null } }),
     prisma.user.delete({ where: { id } }),
   ]);

@@ -30,6 +30,7 @@ interface HandoverEntry {
   createdAt: string;
   updatedAt: string;
   client: { name: string };
+  engineerWorkedBy: { name: string } | null;
   engineer: { name: string } | null;
   filledBy: { name: string } | null;
   shiftHandover?: {
@@ -272,6 +273,7 @@ export default function AdminReportsPage() {
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Client</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Tickets</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Status</th>
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Engineer Worked</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Issues</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Updates</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Engineer Notes</th>
@@ -289,6 +291,9 @@ export default function AdminReportsPage() {
                           <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", getStatusColor(entry.status))}>
                             {getStatusLabel(entry.status)}
                           </span>
+                        </td>
+                        <td className="px-4 py-2 text-gray-600">
+                          {entry.engineerWorkedBy?.name || entry.engineerWorked || "-"}
                         </td>
                         <td className="px-4 py-2 text-gray-700 max-w-[200px]">
                           <span className="line-clamp-2">{entry.issues || "-"}</span>
@@ -327,6 +332,7 @@ export default function AdminReportsPage() {
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Client</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Tickets</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Status</th>
+                  <th className="text-left px-4 py-3 font-semibold text-gray-700">Engineer Worked</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Issues</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Updates</th>
                   <th className="text-left px-4 py-3 font-semibold text-gray-700">Engineer Notes</th>
@@ -357,6 +363,9 @@ export default function AdminReportsPage() {
                       <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", getStatusColor(entry.status))}>
                         {getStatusLabel(entry.status)}
                       </span>
+                    </td>
+                    <td className="px-4 py-2 text-gray-600">
+                      {entry.engineerWorkedBy?.name || entry.engineerWorked || "-"}
                     </td>
                     <td className="px-4 py-2 text-gray-700 max-w-[150px]">
                       <span className="line-clamp-2">{entry.issues || "-"}</span>

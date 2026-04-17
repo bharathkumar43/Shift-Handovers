@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Users, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getShiftLabel } from "@/lib/utils";
 
 interface UserData {
   id: string;
@@ -10,16 +10,24 @@ interface UserData {
   email: string;
   role: string;
   active: boolean;
+  assignedShifts: number[];
   createdAt: string;
 }
 
 const ROLES = ["ENGINEER", "LEAD", "ADMIN"];
+const SHIFT_NUMS = [1, 2, 3] as const;
 
 export default function ManageUsersPage() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: "", email: "", password: "", role: "ENGINEER" });
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "ENGINEER",
+    assignedShifts: [] as number[],
+  });
   const [message, setMessage] = useState("");
   const [adding, setAdding] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -49,7 +57,7 @@ export default function ManageUsersPage() {
 
     if (res.ok) {
       await loadUsers();
-      setFormData({ name: "", email: "", password: "", role: "ENGINEER" });
+      setFormData({ name: "", email: "", password: "", role: "ENGINEER", assignedShifts: [] });
       setShowForm(false);
       setMessage("User added successfully");
       setTimeout(() => setMessage(""), 3000);
@@ -76,6 +84,30 @@ export default function ManageUsersPage() {
       body: JSON.stringify({ id: user.id, role: newRole }),
     });
     await loadUsers();
+  };
+
+  const toggleUserShift = async (user: UserData, shiftNum: number) => {
+    const current = user.assignedShifts ?? [];
+    const has = current.includes(shiftNum);
+    const next = has
+      ? current.filter((s) => s !== shiftNum)
+      : [...current, shiftNum].sort((a, b) => a - b);
+    await fetch("/api/users", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: user.id, assignedShifts: next }),
+    });
+    await loadUsers();
+  };
+
+  const toggleFormShift = (shiftNum: number) => {
+    setFormData((prev) => {
+      const has = prev.assignedShifts.includes(shiftNum);
+      const next = has
+        ? prev.assignedShifts.filter((s) => s !== shiftNum)
+        : [...prev.assignedShifts, shiftNum].sort((a, b) => a - b);
+      return { ...prev, assignedShifts: next };
+    });
   };
 
   const deleteUser = async (user: UserData) => {
@@ -115,7 +147,7 @@ export default function ManageUsersPage() {
         <div
           className={cn(
             "mb-4 px-4 py-2 rounded-lg text-sm border",
-            message.includes("Error") || message.includes("required")
+            /error|forbidden|required|cannot|not found/i.test(message)
               ? "bg-red-50 text-red-700 border-red-200"
               : "bg-green-50 text-green-700 border-green-200"
           )}
@@ -173,6 +205,23 @@ export default function ManageUsersPage() {
                 ))}
               </select>
             </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Shifts covered</label>
+              <p className="text-xs text-gray-400 mb-2">Leave none selected to allow all shifts in handover dropdowns.</p>
+              <div className="flex flex-wrap gap-3">
+                {SHIFT_NUMS.map((sn) => (
+                  <label key={sn} className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.assignedShifts.includes(sn)}
+                      onChange={() => toggleFormShift(sn)}
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    {getShiftLabel(sn)}
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="flex gap-3">
             <button
@@ -193,15 +242,22 @@ export default function ManageUsersPage() {
       )}
 
       {/* Users Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+      <p className="text-xs text-gray-500 mb-2">
+        <strong className="text-gray-600">Deactivate</strong> blocks sign-in but keeps the account.{" "}
+        <strong className="text-gray-600">Delete</strong> permanently removes the user (you cannot delete your own account).
+      </p>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden overflow-x-auto">
+        <table className="w-full text-sm min-w-[720px]">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Name</th>
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Email</th>
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Role</th>
+              <th className="text-left px-6 py-3 font-semibold text-gray-700">Shifts</th>
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Status</th>
-              <th className="text-right px-6 py-3 font-semibold text-gray-700">Actions</th>
+              <th className="text-right px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">
+                Actions <span className="font-normal text-gray-400">(deactivate / delete)</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -223,6 +279,28 @@ export default function ManageUsersPage() {
                   </select>
                 </td>
                 <td className="px-6 py-3">
+                  <div className="flex flex-wrap gap-2">
+                    {SHIFT_NUMS.map((sn) => (
+                      <label
+                        key={sn}
+                        className="inline-flex items-center gap-1 text-xs text-gray-600 cursor-pointer whitespace-nowrap"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={user.assignedShifts?.includes(sn) ?? false}
+                          onChange={() => toggleUserShift(user, sn)}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                        />
+                        <span className="hidden sm:inline">{getShiftLabel(sn)}</span>
+                        <span className="sm:hidden">S{sn}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {(!user.assignedShifts || user.assignedShifts.length === 0) && (
+                    <p className="text-[10px] text-gray-400 mt-1">All shifts</p>
+                  )}
+                </td>
+                <td className="px-6 py-3">
                   <span
                     className={cn(
                       "px-2.5 py-1 rounded-full text-xs font-medium",
@@ -232,12 +310,13 @@ export default function ManageUsersPage() {
                     {user.active ? "Active" : "Inactive"}
                   </span>
                 </td>
-                <td className="px-6 py-3 text-right">
-                  <div className="flex items-center justify-end gap-2">
+                <td className="px-6 py-3 text-right whitespace-nowrap">
+                  <div className="flex items-center justify-end gap-2 flex-wrap sm:flex-nowrap">
                     <button
+                      type="button"
                       onClick={() => toggleUser(user)}
                       className={cn(
-                        "inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors",
+                        "inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors shrink-0",
                         user.active ? "text-amber-600 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"
                       )}
                     >
@@ -252,14 +331,17 @@ export default function ManageUsersPage() {
                       )}
                     </button>
                     {deleteConfirm === user.id ? (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-xs text-gray-500 mr-1 hidden sm:inline">Delete user?</span>
                         <button
+                          type="button"
                           onClick={() => deleteUser(user)}
                           className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
                         >
-                          Confirm
+                          Confirm delete
                         </button>
                         <button
+                          type="button"
                           onClick={() => setDeleteConfirm(null)}
                           className="inline-flex items-center text-xs font-medium px-2 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
                         >
@@ -268,10 +350,13 @@ export default function ManageUsersPage() {
                       </div>
                     ) : (
                       <button
+                        type="button"
                         onClick={() => setDeleteConfirm(user.id)}
-                        className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors shrink-0"
+                        title="Permanently delete this user"
                       >
-                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete
                       </button>
                     )}
                   </div>

@@ -15,10 +15,12 @@ interface HandoverEntry {
   client: { name: string };
   tickets: string | null;
   status: string;
+  engineerWorked: string | null;
   issues: string | null;
   updates: string | null;
   handoverNotes: string | null;
   managerNotes: string | null;
+  engineerWorkedBy: { name: string } | null;
   engineer: { name: string } | null;
   filledBy: { name: string } | null;
 }
@@ -201,6 +203,7 @@ export default function HistoryPage() {
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Client</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Tickets</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Status</th>
+                        <th className="text-left px-3 py-2 font-medium text-gray-600">Engineer Worked</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Issues</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Updates</th>
                         <th className="text-left px-3 py-2 font-medium text-gray-600">Engineer Notes</th>
@@ -220,6 +223,9 @@ export default function HistoryPage() {
                               <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", getStatusColor(entry.status))}>
                                 {getStatusLabel(entry.status)}
                               </span>
+                            </td>
+                            <td className="px-3 py-2 text-gray-600">
+                              {entry.engineerWorkedBy?.name || entry.engineerWorked || "-"}
                             </td>
                             <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate">{entry.issues || "-"}</td>
                             <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate">{entry.updates || "-"}</td>

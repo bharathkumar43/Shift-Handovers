@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
         include: {
           client: true,
           engineer: { select: { id: true, name: true } },
+          engineerWorkedBy: { select: { id: true, name: true } },
           filledBy: { select: { id: true, name: true } },
         },
       },

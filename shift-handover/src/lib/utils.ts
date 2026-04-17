@@ -32,6 +32,12 @@ export function getShiftLabel(shiftNumber: number): string {
   }
 }
 
+/** Empty assignedShifts = eligible for all shifts. */
+export function userWorksShift(assignedShifts: number[], shiftNumber: number): boolean {
+  if (!assignedShifts?.length) return true;
+  return assignedShifts.includes(shiftNumber);
+}
+
 export function getStatusColor(status: string): string {
   switch (status) {
     case "COMPLETE":

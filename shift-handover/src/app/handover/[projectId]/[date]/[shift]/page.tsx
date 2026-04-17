@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, use } from "react";
+import { useEffect, useState, useCallback, use, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck } from "lucide-react";
-import { cn, getStatusColor, getShiftLabel } from "@/lib/utils";
+import { cn, getStatusColor, getShiftLabel, userWorksShift } from "@/lib/utils";
 
 interface Client {
   id: string;
@@ -13,6 +13,7 @@ interface Client {
 interface User {
   id: string;
   name: string;
+  assignedShifts: number[];
 }
 
 interface EntryData {
@@ -20,7 +21,9 @@ interface EntryData {
   clientName: string;
   tickets: string;
   status: string;
-  engineerWorked: string;
+  engineerWorkedUserId: string;
+  /** Legacy free-text when no user id is set */
+  legacyEngineerWorked: string;
   issues: string;
   updates: string;
   handoverNotes: string;
@@ -44,7 +47,14 @@ const STATUS_OPTIONS = [
 ];
 
 function isEntryFilled(entry: EntryData): boolean {
-  return entry.status !== "NA" || !!entry.tickets || !!entry.engineerWorked || !!entry.updates || !!entry.issues;
+  return (
+    entry.status !== "NA" ||
+    !!entry.tickets ||
+    !!entry.engineerWorkedUserId ||
+    !!entry.legacyEngineerWorked?.trim() ||
+    !!entry.updates ||
+    !!entry.issues
+  );
 }
 
 export default function HandoverFormPage({
@@ -74,6 +84,7 @@ export default function HandoverFormPage({
   const isAdmin = userRole === "ADMIN";
   const isLead = userRole === "LEAD";
   const canSubmit = userRole === "ADMIN" || userRole === "LEAD";
+  const canAcknowledgeEngineer = isAdmin || isLead;
 
   useEffect(() => {
     const loadData = async () => {
@@ -87,7 +98,13 @@ export default function HandoverFormPage({
       const usersData = await usersRes.json();
       const handoverData = await handoverRes.json();
 
-      setUsers(usersData.filter((u: { active: boolean }) => u.active));
+      const activeUsers = usersData.filter((u: { active: boolean }) => u.active) as User[];
+      setUsers(
+        activeUsers.map((u) => ({
+          ...u,
+          assignedShifts: Array.isArray(u.assignedShifts) ? u.assignedShifts : [],
+        }))
+      );
 
       const project = projects.find((p: { id: string }) => p.id === projectId);
       if (project) {
@@ -104,7 +121,10 @@ export default function HandoverFormPage({
             clientName: client.name,
             tickets: existing?.tickets || "",
             status: existing?.status || "NA",
-            engineerWorked: existing?.engineerWorked || "",
+            engineerWorkedUserId: existing?.engineerWorkedUserId || "",
+            legacyEngineerWorked: existing?.engineerWorkedUserId
+              ? ""
+              : (existing?.engineerWorked?.trim() || ""),
             issues: existing?.issues || "",
             updates: existing?.updates || "",
             handoverNotes: existing?.handoverNotes || "",
@@ -176,7 +196,20 @@ export default function HandoverFormPage({
           projectId,
           shiftNumber: shift,
           leadNotes,
-          entries,
+          entries: entries.map((e) => ({
+            clientId: e.clientId,
+            tickets: e.tickets,
+            status: e.status,
+            engineerWorkedUserId: e.engineerWorkedUserId || null,
+            engineerWorked: e.engineerWorkedUserId
+              ? null
+              : e.legacyEngineerWorked?.trim() || null,
+            issues: e.issues,
+            updates: e.updates,
+            handoverNotes: e.handoverNotes,
+            managerNotes: e.managerNotes,
+            engineerId: e.engineerId || null,
+          })),
           submit,
         }),
       });
@@ -253,6 +286,31 @@ export default function HandoverFormPage({
     }
     setAcknowledging(false);
   };
+
+  const shiftNum = parseInt(shift, 10) || 1;
+  const nextShiftNum = shiftNum >= 3 ? 1 : shiftNum + 1;
+
+  const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
+
+  const engineerWorkedOptions = useMemo(() => {
+    const selectedIds = entries.map((e) => e.engineerWorkedUserId).filter(Boolean) as string[];
+    const base = users.filter((u) => userWorksShift(u.assignedShifts ?? [], shiftNum));
+    const out = new Map(base.map((u) => [u.id, u]));
+    for (const id of selectedIds) {
+      if (!out.has(id) && usersById.has(id)) out.set(id, usersById.get(id)!);
+    }
+    return Array.from(out.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [users, entries, shiftNum, usersById]);
+
+  const nextEngineerOptions = useMemo(() => {
+    const selectedIds = entries.map((e) => e.engineerId).filter(Boolean) as string[];
+    const base = users.filter((u) => userWorksShift(u.assignedShifts ?? [], nextShiftNum));
+    const out = new Map(base.map((u) => [u.id, u]));
+    for (const id of selectedIds) {
+      if (!out.has(id) && usersById.has(id)) out.set(id, usersById.get(id)!);
+    }
+    return Array.from(out.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [users, entries, nextShiftNum, usersById]);
 
   if (loading) {
     return (
@@ -469,14 +527,35 @@ export default function HandoverFormPage({
                       </select>
                     </td>
                     <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={entry.engineerWorked}
-                        onChange={(e) => updateEntry(entry.clientId, "engineerWorked", e.target.value)}
-                        disabled={isSubmitted}
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 text-gray-900"
-                        placeholder="Name"
-                      />
+                      <div className="space-y-1">
+                        <select
+                          value={entry.engineerWorkedUserId}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setEntries((prev) =>
+                              prev.map((row) =>
+                                row.clientId === entry.clientId
+                                  ? { ...row, engineerWorkedUserId: v, legacyEngineerWorked: v ? "" : row.legacyEngineerWorked }
+                                  : row
+                              )
+                            );
+                          }}
+                          disabled={isSubmitted}
+                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 text-gray-900"
+                        >
+                          <option value="">Select...</option>
+                          {engineerWorkedOptions.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name}
+                            </option>
+                          ))}
+                        </select>
+                        {entry.legacyEngineerWorked ? (
+                          <p className="text-[10px] text-amber-700" title="Saved before user picker">
+                            Legacy: {entry.legacyEngineerWorked}
+                          </p>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-3 py-2">
                       <textarea
@@ -531,7 +610,7 @@ export default function HandoverFormPage({
                         className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 text-gray-900"
                       >
                         <option value="">Select...</option>
-                        {users.map((u) => (
+                        {nextEngineerOptions.map((u) => (
                           <option key={u.id} value={u.id}>
                             {u.name}
                           </option>
@@ -587,21 +666,21 @@ export default function HandoverFormPage({
                     <p className="text-xs text-green-700 mt-1">
                       Acknowledged by <span className="font-medium">{engineerAck.by}</span> on {formatAckTime(engineerAck.at)}
                     </p>
-                  ) : isLead ? (
+                  ) : canAcknowledgeEngineer ? (
                     <p className="text-xs text-gray-500 mt-1">
                       {engineerNotesFilled
                         ? "All engineer notes filled. Ready to acknowledge."
                         : `${engineerNotesFilledCount}/${totalCount} engineer notes filled. All must be filled to acknowledge.`}
                     </p>
                   ) : (
-                    <p className="text-xs text-gray-500 mt-1">Only Shift Leads can acknowledge</p>
+                    <p className="text-xs text-gray-500 mt-1">Only Shift Leads and Admins can acknowledge</p>
                   )}
                 </div>
                 {engineerAck.acknowledged ? (
                   <div className="flex items-center gap-1.5 text-green-600">
                     <CheckCircle className="w-5 h-5" />
                   </div>
-                ) : isLead && handoverId ? (
+                ) : canAcknowledgeEngineer && handoverId ? (
                   <button
                     onClick={() => handleAcknowledge("engineer_acknowledge")}
                     disabled={acknowledging || !engineerNotesFilled}
