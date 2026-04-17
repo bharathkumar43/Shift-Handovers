@@ -3,7 +3,15 @@
 import { useEffect, useState, useCallback, use, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck } from "lucide-react";
-import { cn, getStatusColor, getShiftLabel, userWorksShift } from "@/lib/utils";
+import {
+  cn,
+  getStatusColor,
+  getShiftLabel,
+  userWorksShift,
+  ROW_TINT_OPTIONS,
+  getRowTintSelectClass,
+  getRowTintBackgroundClass,
+} from "@/lib/utils";
 
 interface Client {
   id: string;
@@ -28,6 +36,8 @@ interface EntryData {
   updates: string;
   handoverNotes: string;
   managerNotes: string;
+  /** RED | AMBER | SILVER | GREEN | "" — admin-only; tints full row */
+  rowTint: string;
   engineerId: string;
 }
 
@@ -129,6 +139,7 @@ export default function HandoverFormPage({
             updates: existing?.updates || "",
             handoverNotes: existing?.handoverNotes || "",
             managerNotes: existing?.managerNotes || "",
+            rowTint: existing?.rowTint || "",
             engineerId: existing?.engineerId || "",
           };
         });
@@ -208,6 +219,7 @@ export default function HandoverFormPage({
             updates: e.updates,
             handoverNotes: e.handoverNotes,
             managerNotes: e.managerNotes,
+            rowTint: e.rowTint || null,
             engineerId: e.engineerId || null,
           })),
           submit,
@@ -461,7 +473,7 @@ export default function HandoverFormPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 w-[140px] sticky left-0 bg-gray-50 z-10">
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[200px] sticky left-0 bg-gray-50 z-10">
                   Client
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 w-[140px]">Tickets</th>
@@ -477,17 +489,25 @@ export default function HandoverFormPage({
             <tbody>
               {entries.map((entry, idx) => {
                 const filled = isEntryFilled(entry);
+                const rowBg = getRowTintBackgroundClass(entry.rowTint);
                 return (
                   <tr
                     key={entry.clientId}
                     className={cn(
-                      "border-b border-gray-100 hover:bg-gray-50/50 transition-colors",
-                      idx % 2 === 0 ? "bg-white" : "bg-gray-50/30",
+                      "border-b border-gray-100 transition-colors",
+                      rowBg
+                        ? cn(rowBg, "hover:brightness-[0.99]")
+                        : cn("hover:bg-gray-50/50", idx % 2 === 0 ? "bg-white" : "bg-gray-50/30"),
                       canSubmit && !isSubmitted && !filled && "border-l-4 border-l-amber-400"
                     )}
                   >
-                    <td className="px-3 py-2 font-medium text-gray-900 sticky left-0 bg-inherit z-10 border-r border-gray-100">
-                      <div className="flex items-center gap-1.5">
+                    <td
+                      className={cn(
+                        "px-3 py-2 font-medium text-gray-900 sticky left-0 z-10 border-r border-gray-100/80",
+                        rowBg || (idx % 2 === 0 ? "bg-white" : "bg-gray-50/30")
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
                         {canSubmit && !isSubmitted && (
                           <span
                             className={cn(
@@ -496,7 +516,25 @@ export default function HandoverFormPage({
                             )}
                           />
                         )}
-                        {entry.clientName}
+                        <span className="truncate flex-1 min-w-0">{entry.clientName}</span>
+                        <select
+                          value={entry.rowTint}
+                          onChange={(e) => updateEntry(entry.clientId, "rowTint", e.target.value)}
+                          disabled={!isAdmin}
+                          className={cn(
+                            "shrink-0 w-[2.5rem] max-w-[2.5rem] text-center text-[11px] leading-tight py-0.5 pl-0 pr-4 rounded border shadow-sm",
+                            getRowTintSelectClass(entry.rowTint),
+                            !isAdmin && "cursor-not-allowed opacity-95"
+                          )}
+                          title={isAdmin ? "Row highlight (admin)" : "Row highlight"}
+                          aria-label="Row highlight color"
+                        >
+                          {ROW_TINT_OPTIONS.map((opt) => (
+                            <option key={opt.value || "none"} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </td>
                     <td className="px-3 py-2">

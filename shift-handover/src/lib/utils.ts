@@ -38,6 +38,47 @@ export function userWorksShift(assignedShifts: number[], shiftNumber: number): b
   return assignedShifts.includes(shiftNumber);
 }
 
+/** Compact row-tint labels (first letter per color). */
+export const ROW_TINT_OPTIONS = [
+  { value: "", label: "—" },
+  { value: "RED", label: "R" },
+  { value: "AMBER", label: "A" },
+  { value: "SILVER", label: "S" },
+  { value: "GREEN", label: "G" },
+] as const;
+
+/** Bold closed-state styling for the compact row-tint `<select>`. */
+export function getRowTintSelectClass(tint: string | null | undefined): string {
+  switch (tint) {
+    case "RED":
+      return "bg-red-600 text-white border-red-800 font-semibold";
+    case "AMBER":
+      return "bg-amber-500 text-gray-900 border-amber-700 font-semibold";
+    case "SILVER":
+      return "bg-slate-500 text-white border-slate-700 font-semibold";
+    case "GREEN":
+      return "bg-green-600 text-white border-green-800 font-semibold";
+    default:
+      return "bg-white text-gray-500 border-gray-300";
+  }
+}
+
+/** Full-row background — bold, saturated tints. */
+export function getRowTintBackgroundClass(tint: string | null | undefined): string {
+  switch (tint) {
+    case "RED":
+      return "bg-red-200";
+    case "AMBER":
+      return "bg-amber-200";
+    case "SILVER":
+      return "bg-slate-300";
+    case "GREEN":
+      return "bg-green-300";
+    default:
+      return "";
+  }
+}
+
 export function getStatusColor(status: string): string {
   switch (status) {
     case "COMPLETE":

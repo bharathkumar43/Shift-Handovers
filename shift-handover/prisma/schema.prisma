@@ -26,6 +26,13 @@ enum HandoverStatus {
   SUBMITTED
 }
 
+enum RowTint {
+  RED
+  AMBER
+  SILVER
+  GREEN
+}
+
 model User {
   id        String   @id @default(cuid())
   name      String
@@ -113,6 +120,8 @@ model ClientEntry {
   updates                String?
   handoverNotes          String?
   managerNotes           String?
+  /// Admin-only row highlight; full row uses this tint for everyone.
+  rowTint                RowTint?
   engineerId             String?
   filledById             String?
   createdAt              DateTime @default(now())

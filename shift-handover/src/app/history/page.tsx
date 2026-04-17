@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { History, Search, Eye, Filter } from "lucide-react";
-import { cn, getShiftLabel, getStatusLabel, getStatusColor } from "@/lib/utils";
+import {
+  cn,
+  getShiftLabel,
+  getStatusLabel,
+  getStatusColor,
+  getRowTintBackgroundClass,
+} from "@/lib/utils";
 
 interface Project {
   id: string;
@@ -20,6 +26,7 @@ interface HandoverEntry {
   updates: string | null;
   handoverNotes: string | null;
   managerNotes: string | null;
+  rowTint: string | null;
   engineerWorkedBy: { name: string } | null;
   engineer: { name: string } | null;
   filledBy: { name: string } | null;
@@ -216,7 +223,13 @@ export default function HistoryPage() {
                       {h.entries
                         .filter((e) => e.status !== "NA" || e.tickets || e.issues || e.updates)
                         .map((entry) => (
-                          <tr key={entry.id} className="border-b border-gray-100">
+                          <tr
+                            key={entry.id}
+                            className={cn(
+                              "border-b border-gray-100",
+                              getRowTintBackgroundClass(entry.rowTint) || "bg-white"
+                            )}
+                          >
                             <td className="px-3 py-2 font-medium text-gray-900">{entry.client.name}</td>
                             <td className="px-3 py-2 text-gray-700">{entry.tickets || "-"}</td>
                             <td className="px-3 py-2">

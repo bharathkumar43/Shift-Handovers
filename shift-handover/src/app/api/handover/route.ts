@@ -3,6 +3,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 
+function parseRowTint(v: unknown): "RED" | "AMBER" | "SILVER" | "GREEN" | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (v === "RED" || v === "AMBER" || v === "SILVER" || v === "GREEN") return v;
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -69,6 +75,8 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const { date, projectId, shiftNumber, leadNotes, entries, submit } = body;
+
+  const isAdmin = session.user.role === "ADMIN";
 
   if (submit && session.user.role === "ENGINEER") {
     return NextResponse.json(
@@ -140,6 +148,8 @@ export async function POST(req: NextRequest) {
         filledById = null;
       }
 
+      const rowTintPayload = isAdmin ? parseRowTint(entry.rowTint) : undefined;
+
       await prisma.clientEntry.upsert({
         where: {
           shiftHandoverId_clientId: {
@@ -157,6 +167,7 @@ export async function POST(req: NextRequest) {
           updates: entry.updates || null,
           handoverNotes: entry.handoverNotes || null,
           managerNotes: entry.managerNotes || null,
+          ...(isAdmin ? { rowTint: rowTintPayload } : {}),
           engineerId: entry.engineerId || null,
           filledById,
         },
@@ -172,6 +183,7 @@ export async function POST(req: NextRequest) {
           updates: entry.updates || null,
           handoverNotes: entry.handoverNotes || null,
           managerNotes: entry.managerNotes || null,
+          rowTint: isAdmin ? rowTintPayload : null,
           engineerId: entry.engineerId || null,
           filledById,
         },

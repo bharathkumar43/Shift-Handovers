@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { BarChart3, Calendar, User, Building2 } from "lucide-react";
-import { cn, getStatusColor, getStatusLabel, getShiftLabel } from "@/lib/utils";
+import {
+  cn,
+  getStatusColor,
+  getStatusLabel,
+  getShiftLabel,
+  getRowTintBackgroundClass,
+} from "@/lib/utils";
 
 type Mode = "date" | "employee" | "client";
 
@@ -27,6 +33,7 @@ interface HandoverEntry {
   updates: string | null;
   handoverNotes: string | null;
   managerNotes: string | null;
+  rowTint: string | null;
   createdAt: string;
   updatedAt: string;
   client: { name: string };
@@ -284,7 +291,13 @@ export default function AdminReportsPage() {
                   </thead>
                   <tbody>
                     {h.entries.map((entry) => (
-                      <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                      <tr
+                        key={entry.id}
+                        className={cn(
+                          "border-b border-gray-100",
+                          getRowTintBackgroundClass(entry.rowTint) || "hover:bg-gray-50/50"
+                        )}
+                      >
                         <td className="px-4 py-2 font-medium text-gray-900">{entry.client.name}</td>
                         <td className="px-4 py-2 text-gray-700">{entry.tickets || "-"}</td>
                         <td className="px-4 py-2">
@@ -343,7 +356,13 @@ export default function AdminReportsPage() {
               </thead>
               <tbody>
                 {entries.map((entry) => (
-                  <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                  <tr
+                    key={entry.id}
+                    className={cn(
+                      "border-b border-gray-100",
+                      getRowTintBackgroundClass(entry.rowTint) || "hover:bg-gray-50/50"
+                    )}
+                  >
                     <td className="px-4 py-2 text-gray-900 font-medium whitespace-nowrap">
                       {entry.shiftHandover
                         ? new Date(entry.shiftHandover.date + "T00:00:00").toLocaleDateString("en-US", {
