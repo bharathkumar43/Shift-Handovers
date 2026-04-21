@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { dateParamToDbDate } from "@/lib/db-date";
 
 function parseRowTint(v: unknown): "RED" | "AMBER" | "SILVER" | "GREEN" | null {
   if (v === null || v === undefined || v === "") return null;
@@ -22,12 +23,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
   }
 
+  const shiftNum = parseInt(String(shiftNumber), 10);
+  if (Number.isNaN(shiftNum)) {
+    return NextResponse.json({ error: "Invalid shift number" }, { status: 400 });
+  }
+
   const handover = await prisma.shiftHandover.findUnique({
     where: {
       date_projectId_shiftNumber: {
-        date: new Date(date),
+        date: dateParamToDbDate(date),
         projectId,
-        shiftNumber: parseInt(shiftNumber),
+        shiftNumber: shiftNum,
       },
     },
     include: {
@@ -57,6 +63,7 @@ function entryHasData(entry: {
   issues?: string | null;
   updates?: string | null;
   handoverNotes?: string | null;
+  managerNotes?: string | null;
 }): boolean {
   return !!(
     (entry.status && entry.status !== "NA") ||
@@ -65,7 +72,8 @@ function entryHasData(entry: {
     entry.engineerWorkedUserId ||
     entry.issues ||
     entry.updates ||
-    entry.handoverNotes
+    entry.handoverNotes ||
+    entry.managerNotes
   );
 }
 
@@ -75,6 +83,15 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const { date, projectId, shiftNumber, leadNotes, entries, submit } = body;
+
+  if (!date || !projectId || shiftNumber === undefined || shiftNumber === null) {
+    return NextResponse.json({ error: "Missing date, projectId, or shiftNumber" }, { status: 400 });
+  }
+
+  const shiftNum = parseInt(String(shiftNumber), 10);
+  if (Number.isNaN(shiftNum)) {
+    return NextResponse.json({ error: "Invalid shift number" }, { status: 400 });
+  }
 
   const isAdmin = session.user.role === "ADMIN";
 
@@ -88,9 +105,9 @@ export async function POST(req: NextRequest) {
   const handover = await prisma.shiftHandover.upsert({
     where: {
       date_projectId_shiftNumber: {
-        date: new Date(date),
+        date: dateParamToDbDate(date),
         projectId,
-        shiftNumber: parseInt(shiftNumber),
+        shiftNumber: shiftNum,
       },
     },
     update: {
@@ -100,9 +117,9 @@ export async function POST(req: NextRequest) {
       submittedAt: submit ? new Date() : undefined,
     },
     create: {
-      date: new Date(date),
+      date: dateParamToDbDate(date),
       projectId,
-      shiftNumber: parseInt(shiftNumber),
+      shiftNumber: shiftNum,
       leadNotes,
       leadId: session.user.id,
       status: submit ? "SUBMITTED" : "DRAFT",

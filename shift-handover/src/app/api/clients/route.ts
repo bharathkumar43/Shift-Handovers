@@ -13,9 +13,22 @@ export async function GET(req: NextRequest) {
   const where: Record<string, unknown> = {};
   if (projectId) where.projectId = projectId;
 
+  const includeProjects = searchParams.get("includeProjects") === "true";
   const clients = await prisma.client.findMany({
     where,
-    include: { project: { select: { id: true, name: true } } },
+    include: {
+      project: { select: { id: true, name: true } },
+      ...(includeProjects ? {
+        migrationProject: {
+          select: {
+            id: true, status: true, projectManagerId: true,
+            projectManager: { select: { name: true } },
+            sowStartDate: true, sowEndDate: true, productType: true,
+            _count: { select: { batchRuns: true } },
+          },
+        },
+      } : {}),
+    },
     orderBy: { sortOrder: "asc" },
   });
 
@@ -90,10 +103,17 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Client ID required" }, { status: 400 });
   }
 
-  await prisma.$transaction([
-    prisma.clientEntry.deleteMany({ where: { clientId: id } }),
-    prisma.client.delete({ where: { id } }),
-  ]);
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.clientEntry.deleteMany({ where: { clientId: id } });
+      await tx.migrationProject.deleteMany({ where: { clientId: id } });
+      await tx.client.delete({ where: { id } });
+    });
+  } catch (e) {
+    console.error("[clients DELETE]", e);
+    const msg = e instanceof Error ? e.message : "Could not delete client";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true });
 }

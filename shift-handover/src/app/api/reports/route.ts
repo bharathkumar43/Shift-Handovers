@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { dateParamToDbDate } from "@/lib/db-date";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   if (mode === "date" && date) {
     const handovers = await prisma.shiftHandover.findMany({
-      where: { date: new Date(date) },
+      where: { date: dateParamToDbDate(date) },
       include: {
         project: true,
         lead: { select: { id: true, name: true } },
@@ -40,8 +41,8 @@ export async function GET(req: NextRequest) {
 
   if (mode === "employee" && employeeId) {
     const dateFilter: Record<string, unknown> = {};
-    if (startDate) dateFilter.gte = new Date(startDate);
-    if (endDate) dateFilter.lte = new Date(endDate);
+    if (startDate) dateFilter.gte = dateParamToDbDate(startDate);
+    if (endDate) dateFilter.lte = dateParamToDbDate(endDate);
 
     const entries = await prisma.clientEntry.findMany({
       where: {
@@ -69,8 +70,8 @@ export async function GET(req: NextRequest) {
 
   if (mode === "client" && clientId) {
     const dateFilter: Record<string, unknown> = {};
-    if (startDate) dateFilter.gte = new Date(startDate);
-    if (endDate) dateFilter.lte = new Date(endDate);
+    if (startDate) dateFilter.gte = dateParamToDbDate(startDate);
+    if (endDate) dateFilter.lte = dateParamToDbDate(endDate);
 
     const entries = await prisma.clientEntry.findMany({
       where: {

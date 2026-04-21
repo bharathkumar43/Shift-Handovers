@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { dateParamToDbDate } from "@/lib/db-date";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -11,6 +12,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
+  const day = dateParamToDbDate(date);
 
   const allUsers = await prisma.user.findMany({
     where: { active: true, role: { in: ["ENGINEER", "LEAD"] } },
@@ -24,7 +26,7 @@ export async function GET(req: NextRequest) {
   });
 
   const handovers = await prisma.shiftHandover.findMany({
-    where: { date: new Date(date) },
+    where: { date: day },
     include: {
       project: { select: { id: true, name: true } },
       lead: { select: { id: true, name: true } },

@@ -45,13 +45,15 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ledShifts              ShiftHandover[] @relation("ShiftLead")
-  submittedShifts        ShiftHandover[] @relation("ShiftSubmitter")
-  engineerAcknowledged   ShiftHandover[] @relation("EngineerAcknowledger")
-  managerAcknowledged    ShiftHandover[] @relation("ManagerAcknowledger")
-  clientEntries          ClientEntry[]   @relation("EntryEngineer")
-  workedEntries          ClientEntry[]   @relation("EntryEngineerWorked")
-  filledEntries          ClientEntry[]   @relation("EntryFiller")
+  ledShifts              ShiftHandover[]    @relation("ShiftLead")
+  submittedShifts        ShiftHandover[]    @relation("ShiftSubmitter")
+  engineerAcknowledged   ShiftHandover[]    @relation("EngineerAcknowledger")
+  managerAcknowledged    ShiftHandover[]    @relation("ManagerAcknowledger")
+  clientEntries          ClientEntry[]      @relation("EntryEngineer")
+  workedEntries          ClientEntry[]      @relation("EntryEngineerWorked")
+  filledEntries          ClientEntry[]      @relation("EntryFiller")
+  managedProjects        MigrationProject[] @relation("ManagedProjects")
+  projectComments        ProjectComment[]   @relation("ProjectComments")
 }
 
 model Project {
@@ -73,8 +75,9 @@ model Client {
   sortOrder Int     @default(0)
   active    Boolean @default(true)
 
-  project Project       @relation(fields: [projectId], references: [id])
-  entries ClientEntry[]
+  project          Project           @relation(fields: [projectId], references: [id])
+  entries          ClientEntry[]
+  migrationProject MigrationProject?
 
   @@unique([name, projectId])
 }
@@ -145,4 +148,230 @@ model DailyDashboard {
   actionsForTomorrow String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+// ─── Migration Project Enums ──────────────────────────────────────────────────
+
+enum MigrationProjectStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+// MigrationType is now a plain String (lookup table: MigrationTypeOption)
+
+enum ProductType {
+  CONTENT
+  MESSAGE
+  EMAIL
+}
+
+enum MigrationPhase {
+  PILOT
+  ONE_TIME
+  DELTA
+  COMPLETED
+}
+
+// ─── Migration Project Models ─────────────────────────────────────────────────
+
+model MigrationProject {
+  id                 String                 @id @default(cuid())
+  clientId           String                 @unique
+  status             MigrationProjectStatus @default(NOT_STARTED)
+  projectManagerId   String?
+  sowStartDate       DateTime?              @db.Date
+  sowEndDate         DateTime?              @db.Date
+  kickoffDate        DateTime?              @db.Date
+  migrationType      String?
+  /// Selected MigrationTypeOption values (order preserved); legacy `migrationType` mirrors index 0 for APIs that expect one.
+  migrationTypes     String[]               @default([])
+  productType        ProductType?
+  sourceSystem       String?
+  destinationSystem  String?
+  /// When SOW end date is in the past and project status is not Completed — customer paid for overage work.
+  overagePaid        Boolean                @default(false)
+  description        String?
+  internalNotes      String?
+  migrationPhase        MigrationPhase? @default(PILOT)
+  deltaScheduledDate    DateTime?       @db.Date
+  deltaReadyConfirmedAt DateTime?       @db.Date
+  deltaCompletedAt      DateTime?       @db.Date
+  deltaNotes            String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  client           Client            @relation(fields: [clientId], references: [id])
+  projectManager   User?             @relation("ManagedProjects", fields: [projectManagerId], references: [id])
+  batchRuns        BatchRun[]
+  comments         ProjectComment[]
+  migrationTasks   MigrationTask[]
+  migrationItems   MigrationItem[]
+  migrationIssues  MigrationIssue[]
+}
+
+model BatchRun {
+  id                 String      @id @default(cuid())
+  migrationProjectId String
+  productType        ProductType
+  batchName          String
+  batchNumber        Int?
+  totalItems         Int         @default(0)
+  migratedItems      Int         @default(0)
+  failedItems        Int         @default(0)
+  skippedItems       Int         @default(0)
+  totalSizeGb        Float?
+  migratedSizeGb     Float?
+  plannedStartDate   DateTime?   @db.Date
+  plannedEndDate     DateTime?   @db.Date
+  actualStartDate    DateTime?   @db.Date
+  actualEndDate      DateTime?   @db.Date
+  /// Free-text run status (e.g. PENDING, RUNNING, or labels from your tracker).
+  status             String      @default("PENDING")
+  errorSummary       String?
+  notes              String?
+  /// Free-text phase / tracker row — values come from product-type batch tracker templates (see `batch-tracker-options.ts`).
+  batchPhase         String?
+  /// Key–value fields aligned to the product-line Excel tracker (see `batch-tracker-fieldsets.ts`).
+  trackerDetails     Json?
+  createdById        String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  migrationProject MigrationProject @relation(fields: [migrationProjectId], references: [id], onDelete: Cascade)
+  migrationItems   MigrationItem[]
+
+  @@index([migrationProjectId])
+}
+
+model ProjectComment {
+  id                 String   @id @default(cuid())
+  migrationProjectId String
+  authorId           String
+  content            String
+  editedAt           DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  migrationProject MigrationProject @relation(fields: [migrationProjectId], references: [id], onDelete: Cascade)
+  author           User             @relation("ProjectComments", fields: [authorId], references: [id])
+
+  @@index([migrationProjectId, createdAt])
+}
+
+// ─── Batch Tracker Expansion Enums ───────────────────────────────────────────
+
+enum TaskAssignedTo {
+  CLOUDFUZE
+  CUSTOMER
+  CUSTOMER_CLOUDFUZE
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum MigrationItemStatus {
+  INITIATED_MIGRATION
+  INITIATED_ONE_TIME
+  PILOT_COMPLETED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+enum MigrationCombination {
+  MYDRIVE_MYDRIVE
+  SHAREDDRIVE_SHAREDDRIVE
+  MYDRIVE_SHAREDDRIVE
+  SHAREDDRIVE_MYDRIVE
+  OTHER
+}
+
+enum IssueTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// ─── Batch Tracker Expansion Models ──────────────────────────────────────────
+
+model MigrationTask {
+  id                 String         @id @default(cuid())
+  migrationProjectId String
+  sortOrder          Int            @default(0)
+  taskName           String
+  description        String?
+  assignedTo         TaskAssignedTo @default(CLOUDFUZE)
+  plannedStartDate   DateTime?      @db.Date
+  plannedEndDate     DateTime?      @db.Date
+  actualStartDate    DateTime?      @db.Date
+  actualEndDate      DateTime?      @db.Date
+  status             TaskStatus     @default(NOT_STARTED)
+  comments           String?
+  additionalNotes    String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  migrationProject MigrationProject @relation(fields: [migrationProjectId], references: [id], onDelete: Cascade)
+
+  @@index([migrationProjectId, sortOrder])
+}
+
+model MigrationItem {
+  id                    String               @id @default(cuid())
+  migrationProjectId    String
+  batchRunId            String?
+  sourceEmail           String?
+  sourcePath            String?
+  destinationEmail      String?
+  destinationPath       String?
+  sourceValidation      String?
+  destinationValidation String?
+  migrationStatus       MigrationItemStatus  @default(INITIATED_MIGRATION)
+  combination           MigrationCombination @default(MYDRIVE_MYDRIVE)
+  server                String?
+  comments              String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  migrationProject MigrationProject @relation(fields: [migrationProjectId], references: [id], onDelete: Cascade)
+  batchRun         BatchRun?        @relation(fields: [batchRunId], references: [id], onDelete: SetNull)
+
+  @@index([migrationProjectId])
+  @@index([batchRunId])
+}
+
+model MigrationIssue {
+  id                 String            @id @default(cuid())
+  migrationProjectId String
+  occurredAt         DateTime          @db.Date
+  description        String
+  l3TicketKey        String?
+  cfitsTicketKey     String?
+  ticketStatus       IssueTicketStatus @default(OPEN)
+  resolvedAt         DateTime?         @db.Date
+  resolution         String?
+  daysToSolve        Int?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  migrationProject MigrationProject @relation(fields: [migrationProjectId], references: [id], onDelete: Cascade)
+
+  @@index([migrationProjectId])
+}
+
+model MigrationTypeOption {
+  id          String   @id @default(cuid())
+  value       String   @unique
+  label       String
+  productType String   // "CONTENT", "EMAIL", "MESSAGE", "ALL"
+  isBuiltIn   Boolean  @default(false)
+  createdAt   DateTime @default(now())
 }

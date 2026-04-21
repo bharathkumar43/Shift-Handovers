@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { dateParamToDbDate } from "@/lib/db-date";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -9,9 +10,10 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
+  const day = dateParamToDbDate(date);
 
   const handovers = await prisma.shiftHandover.findMany({
-    where: { date: new Date(date) },
+    where: { date: day },
     include: {
       project: true,
       lead: { select: { id: true, name: true } },
@@ -27,7 +29,7 @@ export async function GET(req: NextRequest) {
   });
 
   const dailyDashboard = await prisma.dailyDashboard.findUnique({
-    where: { date: new Date(date) },
+    where: { date: day },
   });
 
   let totalTickets = 0;
@@ -62,10 +64,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { date, dutyManager, week, keyIssues, actionsForTomorrow } = body;
 
+  const day = dateParamToDbDate(date);
   const dashboard = await prisma.dailyDashboard.upsert({
-    where: { date: new Date(date) },
+    where: { date: day },
     update: { dutyManager, week, keyIssues, actionsForTomorrow },
-    create: { date: new Date(date), dutyManager, week, keyIssues, actionsForTomorrow },
+    create: { date: day, dutyManager, week, keyIssues, actionsForTomorrow },
   });
 
   return NextResponse.json(dashboard);

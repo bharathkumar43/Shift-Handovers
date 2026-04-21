@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { dateParamToDbDate } from "@/lib/db-date";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -12,22 +13,24 @@ export async function GET(req: NextRequest) {
   const endDate = searchParams.get("endDate");
   const projectId = searchParams.get("projectId");
   const shiftNumber = searchParams.get("shiftNumber");
+  const clientId = searchParams.get("clientId");
 
   const where: Record<string, unknown> = {};
 
   if (startDate && endDate) {
     where.date = {
-      gte: new Date(startDate),
-      lte: new Date(endDate),
+      gte: dateParamToDbDate(startDate),
+      lte: dateParamToDbDate(endDate),
     };
   } else if (startDate) {
-    where.date = { gte: new Date(startDate) };
+    where.date = { gte: dateParamToDbDate(startDate) };
   } else if (endDate) {
-    where.date = { lte: new Date(endDate) };
+    where.date = { lte: dateParamToDbDate(endDate) };
   }
 
   if (projectId) where.projectId = projectId;
   if (shiftNumber) where.shiftNumber = parseInt(shiftNumber);
+  if (clientId) where.entries = { some: { clientId } };
 
   const handovers = await prisma.shiftHandover.findMany({
     where,

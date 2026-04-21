@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, use, useMemo } from "react";
 import { useSession } from "next-auth/react";
-import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck, ExternalLink } from "lucide-react";
 import {
   cn,
   getStatusColor,
@@ -96,97 +96,133 @@ export default function HandoverFormPage({
   const canSubmit = userRole === "ADMIN" || userRole === "LEAD";
   const canAcknowledgeEngineer = isAdmin || isLead;
 
-  useEffect(() => {
-    const loadData = async () => {
-      const [projectsRes, usersRes, handoverRes] = await Promise.all([
-        fetch("/api/projects"),
-        fetch("/api/users"),
-        fetch(`/api/handover?date=${date}&projectId=${projectId}&shiftNumber=${shift}`),
-      ]);
+  const loadHandoverPage = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      try {
+        const [projectsRes, usersRes, handoverRes] = await Promise.all([
+          fetch("/api/projects"),
+          fetch("/api/users"),
+          fetch(`/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(shift)}`),
+        ]);
 
-      const projects = await projectsRes.json();
-      const usersData = await usersRes.json();
-      const handoverData = await handoverRes.json();
+        const projects = await projectsRes.json();
+        const usersData = await usersRes.json();
 
-      const activeUsers = usersData.filter((u: { active: boolean }) => u.active) as User[];
-      setUsers(
-        activeUsers.map((u) => ({
-          ...u,
-          assignedShifts: Array.isArray(u.assignedShifts) ? u.assignedShifts : [],
-        }))
-      );
-
-      const project = projects.find((p: { id: string }) => p.id === projectId);
-      if (project) {
-        setProjectName(project.name);
-        const timings = [project.shift1Timing, project.shift2Timing, project.shift3Timing];
-        setProjectTiming(timings[parseInt(shift) - 1] || "");
-
-        const clientEntries: EntryData[] = project.clients.map((client: Client) => {
-          const existing = handoverData?.entries?.find(
-            (e: { client: { id: string } }) => e.client.id === client.id
-          );
-          return {
-            clientId: client.id,
-            clientName: client.name,
-            tickets: existing?.tickets || "",
-            status: existing?.status || "NA",
-            engineerWorkedUserId: existing?.engineerWorkedUserId || "",
-            legacyEngineerWorked: existing?.engineerWorkedUserId
-              ? ""
-              : (existing?.engineerWorked?.trim() || ""),
-            issues: existing?.issues || "",
-            updates: existing?.updates || "",
-            handoverNotes: existing?.handoverNotes || "",
-            managerNotes: existing?.managerNotes || "",
-            rowTint: existing?.rowTint || "",
-            engineerId: existing?.engineerId || "",
-          };
-        });
-        setEntries(clientEntries);
-
-        if (handoverData) {
-          setLeadNotes(handoverData.leadNotes || "");
-          setHandoverStatus(handoverData.status || "DRAFT");
-          setHandoverId(handoverData.id || null);
-          setEngineerAck({
-            acknowledged: handoverData.engineerAcknowledged || false,
-            by: handoverData.engineerAcknowledger?.name || null,
-            at: handoverData.engineerAcknowledgedAt || null,
-          });
-          setManagerAck({
-            acknowledged: handoverData.managerAcknowledged || false,
-            by: handoverData.managerAcknowledger?.name || null,
-            at: handoverData.managerAcknowledgedAt || null,
-          });
+        if (!handoverRes.ok) {
+          const err = await handoverRes.json().catch(() => ({}));
+          if (!opts?.silent) {
+            setSaveMessage(
+              typeof err?.error === "string"
+                ? err.error
+                : "Could not load saved handover. Try refreshing or signing in again."
+            );
+            setTimeout(() => setSaveMessage(""), 5000);
+          }
         }
-      }
 
-      const prevShift = parseInt(shift) - 1;
-      if (prevShift >= 1) {
-        const prevRes = await fetch(
-          `/api/handover?date=${date}&projectId=${projectId}&shiftNumber=${prevShift}`
+        const handoverData = handoverRes.ok ? await handoverRes.json() : null;
+
+        const activeUsers = usersData.filter((u: { active: boolean }) => u.active) as User[];
+        setUsers(
+          activeUsers.map((u) => ({
+            ...u,
+            assignedShifts: Array.isArray(u.assignedShifts) ? u.assignedShifts : [],
+          }))
         );
-        const prevData = await prevRes.json();
-        if (prevData?.entries) {
-          setPreviousShiftEntries(
-            prevData.entries
-              .filter((e: { handoverNotes: string }) => e.handoverNotes)
-              .map((e: { client: { name: string }; handoverNotes: string; status: string; updates: string }) => ({
-                clientName: e.client.name,
-                handoverNotes: e.handoverNotes,
-                status: e.status,
-                updates: e.updates,
-              }))
-          );
+
+        const project = projects.find((p: { id: string }) => p.id === projectId);
+        if (project) {
+          setProjectName(project.name);
+          const timings = [project.shift1Timing, project.shift2Timing, project.shift3Timing];
+          setProjectTiming(timings[parseInt(shift, 10) - 1] || "");
+
+          const clientEntries: EntryData[] = project.clients.map((client: Client) => {
+            const existing = handoverData?.entries?.find(
+              (e: { client: { id: string } }) => e.client.id === client.id
+            );
+            return {
+              clientId: client.id,
+              clientName: client.name,
+              tickets: existing?.tickets || "",
+              status: existing?.status || "NA",
+              engineerWorkedUserId: existing?.engineerWorkedUserId || "",
+              legacyEngineerWorked: existing?.engineerWorkedUserId
+                ? ""
+                : (existing?.engineerWorked?.trim() || ""),
+              issues: existing?.issues || "",
+              updates: existing?.updates || "",
+              handoverNotes: existing?.handoverNotes || "",
+              managerNotes: existing?.managerNotes || "",
+              rowTint: existing?.rowTint || "",
+              engineerId: existing?.engineerId || "",
+            };
+          });
+          setEntries(clientEntries);
+
+          if (handoverData) {
+            setLeadNotes(handoverData.leadNotes || "");
+            setHandoverStatus(handoverData.status || "DRAFT");
+            setHandoverId(handoverData.id || null);
+            setEngineerAck({
+              acknowledged: handoverData.engineerAcknowledged || false,
+              by: handoverData.engineerAcknowledger?.name || null,
+              at: handoverData.engineerAcknowledgedAt || null,
+            });
+            setManagerAck({
+              acknowledged: handoverData.managerAcknowledged || false,
+              by: handoverData.managerAcknowledger?.name || null,
+              at: handoverData.managerAcknowledgedAt || null,
+            });
+          } else if (handoverRes.ok) {
+            setLeadNotes("");
+            setHandoverStatus("DRAFT");
+            setHandoverId(null);
+            setEngineerAck({ acknowledged: false, by: null, at: null });
+            setManagerAck({ acknowledged: false, by: null, at: null });
+          }
         }
+
+        const prevShift = parseInt(shift, 10) - 1;
+        if (prevShift >= 1) {
+          const prevRes = await fetch(
+            `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(String(prevShift))}`
+          );
+          const prevData = prevRes.ok ? await prevRes.json() : null;
+          if (prevData?.entries) {
+            setPreviousShiftEntries(
+              prevData.entries
+                .filter((e: { handoverNotes: string }) => e.handoverNotes)
+                .map(
+                  (e: {
+                    client: { name: string };
+                    handoverNotes: string;
+                    status: string;
+                    updates: string;
+                  }) => ({
+                    clientName: e.client.name,
+                    handoverNotes: e.handoverNotes,
+                    status: e.status,
+                    updates: e.updates,
+                  })
+                )
+            );
+          } else {
+            setPreviousShiftEntries([]);
+          }
+        } else {
+          setPreviousShiftEntries([]);
+        }
+      } finally {
+        setLoading(false);
       }
+    },
+    [projectId, date, shift]
+  );
 
-      setLoading(false);
-    };
-
-    loadData();
-  }, [projectId, date, shift]);
+  useEffect(() => {
+    loadHandoverPage();
+  }, [loadHandoverPage]);
 
   const updateEntry = useCallback((clientId: string, field: string, value: string) => {
     setEntries((prev) =>
@@ -227,23 +263,7 @@ export default function HandoverFormPage({
       });
 
       if (res.ok) {
-        const result = await res.json();
-        if (submit) {
-          setHandoverStatus("SUBMITTED");
-        }
-        if (result.id) {
-          setHandoverId(result.id);
-        }
-        setEngineerAck({
-          acknowledged: result.engineerAcknowledged || false,
-          by: result.engineerAcknowledger?.name || null,
-          at: result.engineerAcknowledgedAt || null,
-        });
-        setManagerAck({
-          acknowledged: result.managerAcknowledged || false,
-          by: result.managerAcknowledger?.name || null,
-          at: result.managerAcknowledgedAt || null,
-        });
+        await loadHandoverPage({ silent: true });
         setSaveMessage(submit ? "Submitted successfully!" : "Saved as draft");
         setTimeout(() => setSaveMessage(""), 3000);
       } else {
@@ -517,6 +537,16 @@ export default function HandoverFormPage({
                           />
                         )}
                         <span className="truncate flex-1 min-w-0">{entry.clientName}</span>
+                        <a
+                          href={`/client-projects/${entry.clientId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="View migration project"
+                          className="shrink-0 text-gray-400 hover:text-indigo-600 transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
                         <select
                           value={entry.rowTint}
                           onChange={(e) => updateEntry(entry.clientId, "rowTint", e.target.value)}

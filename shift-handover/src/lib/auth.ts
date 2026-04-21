@@ -8,6 +8,49 @@ const ADMIN_EMAILS = [
   "bharath.tummaganti@cloudfuze.com",
 ];
 
+const AZURE_SCOPES = "openid profile email User.Read offline_access";
+
+/**
+ * Renews Microsoft Graph access using the OAuth refresh token (access tokens expire ~1h).
+ */
+async function refreshAzureAccessToken(refreshToken: string): Promise<{
+  access_token: string;
+  expires_in: number;
+  refresh_token?: string;
+} | null> {
+  const tenantId = process.env.AZURE_AD_TENANT_ID?.trim();
+  const clientId = process.env.AZURE_AD_CLIENT_ID?.trim();
+  const clientSecret = process.env.AZURE_AD_CLIENT_SECRET?.trim();
+  if (!tenantId || !clientId || !clientSecret) return null;
+
+  const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+    scope: AZURE_SCOPES,
+  });
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    const t = await res.text();
+    console.error("[auth] Azure token refresh failed:", res.status, t.slice(0, 400));
+    return null;
+  }
+
+  return res.json() as Promise<{
+    access_token: string;
+    expires_in: number;
+    refresh_token?: string;
+  }>;
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     AzureADProvider({
@@ -16,7 +59,7 @@ export const authOptions: NextAuthOptions = {
       tenantId: process.env.AZURE_AD_TENANT_ID || "",
       authorization: {
         params: {
-          scope: "openid profile email User.Read",
+          scope: AZURE_SCOPES,
         },
       },
     }),
@@ -95,13 +138,41 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as { role: string }).role;
       }
 
-      if (account?.provider === "azure-ad" && user?.email) {
-        const dbUser = await prisma.user.findFirst({
-          where: { email: { equals: user.email, mode: "insensitive" } },
-        });
-        if (dbUser) {
-          token.id = dbUser.id;
-          token.role = dbUser.role;
+      if (account?.provider === "azure-ad") {
+        if (account.access_token) token.accessToken = account.access_token;
+        if (account.refresh_token) token.refreshToken = account.refresh_token;
+        const expSec = account.expires_at;
+        token.accessTokenExpires =
+          typeof expSec === "number"
+            ? expSec * 1000
+            : Date.now() + ((account as { expires_in?: number }).expires_in ?? 3600) * 1000;
+        delete token.error;
+        if (user?.email) {
+          const dbUser = await prisma.user.findFirst({
+            where: { email: { equals: user.email, mode: "insensitive" } },
+          });
+          if (dbUser) {
+            token.id = dbUser.id;
+            token.role = dbUser.role;
+          }
+        }
+      }
+
+      // Renew expired (or soon-to-expire) Graph token for Azure sessions.
+      if (token.refreshToken && typeof token.accessTokenExpires === "number") {
+        const bufferMs = 60_000;
+        if (Date.now() < token.accessTokenExpires - bufferMs) {
+          return token;
+        }
+        const refreshed = await refreshAzureAccessToken(token.refreshToken as string);
+        if (refreshed?.access_token) {
+          token.accessToken = refreshed.access_token;
+          token.accessTokenExpires = Date.now() + (refreshed.expires_in ?? 3600) * 1000;
+          if (refreshed.refresh_token) token.refreshToken = refreshed.refresh_token;
+          delete token.error;
+        } else {
+          token.error = "RefreshAccessTokenError";
+          token.accessToken = undefined;
         }
       }
 
@@ -111,6 +182,10 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as { id: string }).id = token.id as string;
         (session.user as { role: string }).role = token.role as string;
+      }
+      (session as { accessToken?: string }).accessToken = token.accessToken as string | undefined;
+      if (token.error) {
+        (session as { error?: string }).error = token.error as string;
       }
       return session;
     },

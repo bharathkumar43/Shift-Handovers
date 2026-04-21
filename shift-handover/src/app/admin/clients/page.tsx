@@ -18,6 +18,17 @@ interface Client {
   project: { id: string; name: string };
 }
 
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  const text = await res.text();
+  if (!text.trim()) return fallback;
+  try {
+    const j = JSON.parse(text) as { error?: string };
+    return j.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function ManageClientsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -61,8 +72,7 @@ export default function ManageClientsPage() {
       setMessage("Client added successfully");
       setTimeout(() => setMessage(""), 3000);
     } else {
-      const err = await res.json();
-      setMessage(err.error || "Error adding client");
+      setMessage(await readErrorMessage(res, "Error adding client"));
     }
     setAdding(false);
   };
@@ -86,8 +96,7 @@ export default function ManageClientsPage() {
       setMessage(`Client "${client.name}" has been deleted`);
       setTimeout(() => setMessage(""), 3000);
     } else {
-      const err = await res.json();
-      setMessage(err.error || "Error deleting client");
+      setMessage(await readErrorMessage(res, "Error deleting client"));
     }
     setDeleteConfirm(null);
   };

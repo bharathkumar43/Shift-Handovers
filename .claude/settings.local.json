@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma *)",
+      "Bash(mkdir -p \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\api\\\\client-projects\\\\[clientId]\\\\jira\\\\sync\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\api\\\\client-projects\\\\[clientId]\\\\jira\\\\[ticketId]\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\api\\\\client-projects\\\\[clientId]\\\\batches\\\\[batchId]\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\api\\\\client-projects\\\\[clientId]\\\\comments\\\\[commentId]\")",
+      "Bash(mkdir -p \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\api\\\\client-projects\\\\[clientId]\\\\sharepoint-sync\")",
+      "Bash(npx tsc *)",
+      "Bash(python3)",
+      "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/tasks/[taskId]\")",
+      "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/tasks/reorder\")",
+      "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/items/[itemId]\")",
+      "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/items/bulk\")",
+      "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/issues/[issueId]\")"
+    ]
+  }
+}

@@ -8,6 +8,9 @@ declare module "next-auth" {
       email: string;
       role: string;
     };
+    accessToken?: string;
+    /** Set when Azure token refresh fails; user should sign out and sign in again. */
+    error?: string;
   }
 
   interface User {
@@ -22,5 +25,11 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     role: string;
+    accessToken?: string;
+    /** Azure AD refresh token (server-only; used to renew Graph access). */
+    refreshToken?: string;
+    /** When `accessToken` expires (ms since epoch). */
+    accessTokenExpires?: number;
+    error?: string;
   }
 }
