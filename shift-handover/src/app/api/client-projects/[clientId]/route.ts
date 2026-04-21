@@ -4,14 +4,14 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { resolveEffectiveProductTypeFromMigrationOptions } from "@/lib/effective-product-type";
 import { normalizeMigrationTypesFromDb } from "@/lib/migration-project-helpers";
-import type { ProductType } from "@prisma/client";
+import type { MigrationTypeOption, ProductType } from "@prisma/client";
 
-async function orderedMigrationOptions(values: string[]) {
+async function orderedMigrationOptions(values: string[]): Promise<MigrationTypeOption[]> {
   if (!values.length) return [];
   const all = await prisma.migrationTypeOption.findMany();
   return values
     .map((v) => all.find((o) => o.value.toLowerCase() === v.toLowerCase()))
-    .filter((o): o is { productType: string } => !!o);
+    .filter((o): o is MigrationTypeOption => o != null);
 }
 
 async function effectiveProductTypeForProject(mp: {
