@@ -129,6 +129,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const syncWarningSet = new Set<string>();
+
   const handover = await prisma.shiftHandover.upsert({
     where: {
       date_projectId_shiftNumber: {
