@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { resolveEffectiveProductType } from "@/lib/effective-product-type";
+import { resolveProductLineForBatchTracker } from "@/lib/migration-project-product-line";
 import { sanitizeTrackerDetailsFromBody } from "@/lib/batch-tracker-fieldsets";
 import { Prisma } from "@prisma/client";
 
@@ -26,15 +26,7 @@ export async function PUT(
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const mp = existing.migrationProject;
-  let mtOpt = mp.migrationType
-    ? await prisma.migrationTypeOption.findUnique({ where: { value: mp.migrationType } })
-    : null;
-  if (!mtOpt && mp.migrationType) {
-    mtOpt = await prisma.migrationTypeOption.findFirst({
-      where: { value: { equals: mp.migrationType, mode: "insensitive" } },
-    });
-  }
-  const resolvedProductType = resolveEffectiveProductType(mtOpt?.productType, mp.productType);
+  const resolvedProductType = await resolveProductLineForBatchTracker(mp);
 
   const dateFields = ["plannedStartDate", "plannedEndDate", "actualStartDate", "actualEndDate"];
   const allowed = [
@@ -52,9 +44,7 @@ export async function PUT(
     const td = sanitizeTrackerDetailsFromBody(body.trackerDetails);
     data.trackerDetails = td ?? Prisma.JsonNull;
   }
-  if (resolvedProductType) {
-    data.productType = resolvedProductType;
-  }
+  data.productType = resolvedProductType;
 
   const batch = await prisma.batchRun.update({ where: { id: batchId }, data });
   return NextResponse.json(batch);

@@ -8,7 +8,9 @@ import {
   getStatusLabel,
   getShiftLabel,
   getRowTintBackgroundClass,
+  userHasShiftAssignments,
 } from "@/lib/utils";
+import TicketLinksDisplay from "@/components/TicketLinksDisplay";
 
 type Mode = "date" | "employee" | "client";
 
@@ -16,6 +18,7 @@ interface UserOption {
   id: string;
   name: string;
   email: string;
+  assignedShifts?: number[];
 }
 
 interface ClientOption {
@@ -78,7 +81,8 @@ export default function AdminReportsPage() {
       fetch("/api/users").then((r) => r.json()),
       fetch("/api/clients").then((r) => r.json()),
     ]).then(([usersData, clientsData]) => {
-      setUsers(usersData);
+      const list = Array.isArray(usersData) ? usersData : [];
+      setUsers(list.filter((u: UserOption) => userHasShiftAssignments(u.assignedShifts)));
       setClients(clientsData);
     });
   }, []);
@@ -299,7 +303,7 @@ export default function AdminReportsPage() {
                         )}
                       >
                         <td className="px-4 py-2 font-medium text-gray-900">{entry.client.name}</td>
-                        <td className="px-4 py-2 text-gray-700">{entry.tickets || "-"}</td>
+                        <td className="px-4 py-2 text-gray-700 align-top max-w-[220px]"><TicketLinksDisplay text={entry.tickets} /></td>
                         <td className="px-4 py-2">
                           <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", getStatusColor(entry.status))}>
                             {getStatusLabel(entry.status)}
@@ -377,7 +381,7 @@ export default function AdminReportsPage() {
                       {entry.shiftHandover ? getShiftLabel(entry.shiftHandover.shiftNumber) : "-"}
                     </td>
                     <td className="px-4 py-2 font-medium text-gray-900">{entry.client.name}</td>
-                    <td className="px-4 py-2 text-gray-700">{entry.tickets || "-"}</td>
+                    <td className="px-4 py-2 text-gray-700 align-top max-w-[220px]"><TicketLinksDisplay text={entry.tickets} /></td>
                     <td className="px-4 py-2">
                       <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", getStatusColor(entry.status))}>
                         {getStatusLabel(entry.status)}

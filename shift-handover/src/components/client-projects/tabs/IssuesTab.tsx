@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Plus, Pencil, Trash2, Check, X, ChevronDown, ChevronUp } from "lucide-react";
 
 interface MigrationIssue {
@@ -13,6 +13,8 @@ interface MigrationIssue {
   resolvedAt: string | null;
   resolution: string | null;
   daysToSolve: number | null;
+  /** Set when this row mirrors the shift handover "Issues" cell for the client */
+  sourceClientEntryId?: string | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -300,8 +302,8 @@ export default function IssuesTab({ clientId, role, onCountChange }: Props) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.map((issue) => (
-                <>
-                  <tr key={issue.id} className="hover:bg-gray-50">
+                <Fragment key={issue.id}>
+                  <tr className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap text-xs">{fmt(issue.occurredAt)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -314,6 +316,11 @@ export default function IssuesTab({ clientId, role, onCountChange }: Props) {
                             : <ChevronDown className="w-3.5 h-3.5" />}
                         </button>
                         <span className="text-gray-800 line-clamp-1">{issue.description}</span>
+                        {issue.sourceClientEntryId && (
+                          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            Handover
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
@@ -357,7 +364,7 @@ export default function IssuesTab({ clientId, role, onCountChange }: Props) {
                     )}
                   </tr>
                   {expandedId === issue.id && (
-                    <tr key={`${issue.id}-exp`} className="bg-gray-50">
+                    <tr className="bg-gray-50">
                       <td colSpan={canEdit ? 6 : 5} className="px-8 py-3">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-600">
                           <div>
@@ -384,7 +391,7 @@ export default function IssuesTab({ clientId, role, onCountChange }: Props) {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>

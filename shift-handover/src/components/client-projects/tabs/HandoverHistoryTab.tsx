@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { cn, getStatusColor } from "@/lib/utils";
+import TicketLinksDisplay from "@/components/TicketLinksDisplay";
 import { format } from "date-fns";
 
 interface ClientEntry {
@@ -48,7 +49,7 @@ export default function HandoverHistoryTab({ clientId }: Props) {
   useEffect(() => {
     setLoading(true);
     const url = `/api/history?clientId=${clientId}&startDate=${startDate}&endDate=${endDate}`;
-    fetch(url)
+    fetch(url, { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
         const filtered = data.map((h: Handover) => ({
@@ -105,7 +106,12 @@ export default function HandoverHistoryTab({ clientId }: Props) {
                         {entry.status.replace(/_/g, " ")}
                       </span>
                     )}
-                    {entry?.tickets && <span className="text-xs text-gray-500">Tickets: {entry.tickets}</span>}
+                    {entry?.tickets?.trim() && (
+                      <div className="text-xs text-gray-600 flex flex-wrap items-baseline gap-x-1 gap-y-0.5">
+                        <span className="font-medium text-gray-500 shrink-0">Tickets:</span>
+                        <TicketLinksDisplay text={entry.tickets} variant="inline" />
+                      </div>
+                    )}
                   </div>
                   {expanded ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
                 </button>
@@ -132,6 +138,12 @@ export default function HandoverHistoryTab({ clientId }: Props) {
                         </div>
                       )}
                     </div>
+                    {entry.tickets?.trim() && (
+                      <div>
+                        <span className="text-xs font-medium text-gray-600 block mb-0.5">Tickets</span>
+                        <TicketLinksDisplay text={entry.tickets} className="text-sm" />
+                      </div>
+                    )}
                     {entry.issues && (
                       <div>
                         <span className="text-xs font-medium text-red-500 block mb-0.5">Issues</span>

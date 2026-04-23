@@ -10,6 +10,7 @@ import {
   getStatusColor,
   getRowTintBackgroundClass,
 } from "@/lib/utils";
+import TicketLinksDisplay from "@/components/TicketLinksDisplay";
 
 interface Project {
   id: string;
@@ -56,7 +57,7 @@ export default function HistoryPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/projects")
+    fetch("/api/projects", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => setProjects(data));
   }, []);
@@ -69,7 +70,7 @@ export default function HistoryPage() {
     if (selectedProject) params.set("projectId", selectedProject);
     if (selectedShift) params.set("shiftNumber", selectedShift);
 
-    const res = await fetch(`/api/history?${params.toString()}`);
+    const res = await fetch(`/api/history?${params.toString()}`, { cache: "no-store" });
     const data = await res.json();
     setHandovers(data);
     setLoading(false);
@@ -231,7 +232,9 @@ export default function HistoryPage() {
                             )}
                           >
                             <td className="px-3 py-2 font-medium text-gray-900">{entry.client.name}</td>
-                            <td className="px-3 py-2 text-gray-700">{entry.tickets || "-"}</td>
+                            <td className="px-3 py-2 text-gray-700 align-top max-w-[240px]">
+                              <TicketLinksDisplay text={entry.tickets} />
+                            </td>
                             <td className="px-3 py-2">
                               <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", getStatusColor(entry.status))}>
                                 {getStatusLabel(entry.status)}

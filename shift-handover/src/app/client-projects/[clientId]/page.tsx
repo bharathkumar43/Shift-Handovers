@@ -10,6 +10,7 @@ import ProjectEditForm from "@/components/client-projects/ProjectEditForm";
 import OverviewTab from "@/components/client-projects/tabs/OverviewTab";
 import MigrationItemsTab from "@/components/client-projects/tabs/MigrationItemsTab";
 import IssuesTab from "@/components/client-projects/tabs/IssuesTab";
+import TicketsTab from "@/components/client-projects/tabs/TicketsTab";
 import BatchTab from "@/components/client-projects/tabs/BatchTab";
 import HandoverHistoryTab from "@/components/client-projects/tabs/HandoverHistoryTab";
 
@@ -42,6 +43,7 @@ interface MigrationProject {
     comments: number;
     migrationItems: number;
     migrationIssues: number;
+    migrationProjectTickets: number;
   };
 }
 
@@ -69,6 +71,7 @@ export default function ClientProjectPage() {
   const [batchCount, setBatchCount] = useState(0);
   const [itemCount, setItemCount] = useState(0);
   const [issueCount, setIssueCount] = useState(0);
+  const [ticketCount, setTicketCount] = useState(0);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
@@ -117,6 +120,7 @@ export default function ClientProjectPage() {
         setBatchCount(cnt.batchRuns ?? 0);
         setItemCount(cnt.migrationItems ?? 0);
         setIssueCount(cnt.migrationIssues ?? 0);
+        setTicketCount(cnt.migrationProjectTickets ?? 0);
         setUsers(Array.isArray(usersData) ? usersData : []);
       } catch (err: unknown) {
         if (!cancelled) {
@@ -194,6 +198,7 @@ export default function ClientProjectPage() {
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "items", label: "Migration Items", count: itemCount },
+    { id: "tickets", label: "Tickets", count: ticketCount },
     { id: "issues", label: "Issues", count: issueCount },
     { id: "batches", label: "Batch Tracker", count: batchCount },
     { id: "history", label: "Handover History" },
@@ -226,6 +231,9 @@ export default function ClientProjectPage() {
             role={currentUserRole}
             onCountChange={setItemCount}
           />
+        )}
+        {activeTab === "tickets" && (
+          <TicketsTab clientId={clientId} onCountChange={setTicketCount} />
         )}
         {activeTab === "issues" && (
           <IssuesTab

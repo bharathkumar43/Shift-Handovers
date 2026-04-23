@@ -44,7 +44,16 @@ export async function GET(
       where: { clientId },
       include: {
         projectManager: { select: { id: true, name: true } },
-        _count: { select: { batchRuns: true, comments: true, migrationTasks: true, migrationItems: true, migrationIssues: true } },
+        _count: {
+          select: {
+            batchRuns: true,
+            comments: true,
+            migrationTasks: true,
+            migrationItems: true,
+            migrationIssues: true,
+            migrationProjectTickets: true,
+          },
+        },
       },
     });
 
@@ -53,7 +62,16 @@ export async function GET(
         data: { clientId },
         include: {
           projectManager: { select: { id: true, name: true } },
-          _count: { select: { batchRuns: true, comments: true, migrationTasks: true, migrationItems: true, migrationIssues: true } },
+          _count: {
+            select: {
+              batchRuns: true,
+              comments: true,
+              migrationTasks: true,
+              migrationItems: true,
+              migrationIssues: true,
+              migrationProjectTickets: true,
+            },
+          },
         },
       });
     }
@@ -148,7 +166,16 @@ export async function PUT(
       create: { clientId, ...data },
       include: {
         projectManager: { select: { id: true, name: true } },
-        _count: { select: { batchRuns: true, comments: true, migrationTasks: true, migrationItems: true, migrationIssues: true } },
+        _count: {
+          select: {
+            batchRuns: true,
+            comments: true,
+            migrationTasks: true,
+            migrationItems: true,
+            migrationIssues: true,
+            migrationProjectTickets: true,
+          },
+        },
       },
     });
 

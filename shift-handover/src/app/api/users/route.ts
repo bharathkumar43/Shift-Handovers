@@ -4,6 +4,17 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import bcrypt from "bcryptjs";
 
+export const dynamic = "force-dynamic";
+
+const NO_STORE = { "Cache-Control": "private, no-store, must-revalidate" } as const;
+
+function json(data: unknown, init?: ResponseInit) {
+  return NextResponse.json(data, {
+    ...init,
+    headers: { ...NO_STORE, ...(init?.headers as Record<string, string> | undefined) },
+  });
+}
+
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,7 +32,7 @@ export async function GET() {
     orderBy: { name: "asc" },
   });
 
-  return NextResponse.json(users);
+  return json(users);
 }
 
 export async function POST(req: NextRequest) {

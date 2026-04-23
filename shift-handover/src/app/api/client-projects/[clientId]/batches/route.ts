@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { resolveEffectiveProductType } from "@/lib/effective-product-type";
+import { resolveProductLineForBatchTracker } from "@/lib/migration-project-product-line";
 import { sanitizeTrackerDetailsFromBody } from "@/lib/batch-tracker-fieldsets";
 import { Prisma } from "@prisma/client";
 
@@ -47,24 +47,7 @@ export async function POST(
 
   if (!batchName) return NextResponse.json({ error: "Batch name required" }, { status: 400 });
 
-  let mtOpt = mp.migrationType
-    ? await prisma.migrationTypeOption.findUnique({ where: { value: mp.migrationType } })
-    : null;
-  if (!mtOpt && mp.migrationType) {
-    mtOpt = await prisma.migrationTypeOption.findFirst({
-      where: { value: { equals: mp.migrationType, mode: "insensitive" } },
-    });
-  }
-  const effectiveProductType = resolveEffectiveProductType(mtOpt?.productType, mp.productType);
-  if (!effectiveProductType) {
-    return NextResponse.json(
-      {
-        error:
-          "Choose a migration type on the project (e.g. Exchange → Microsoft 365) so the batch tracker can pick Content / Email / Message options. Generic “Other” migrations need product type set on the project.",
-      },
-      { status: 400 }
-    );
-  }
+  const effectiveProductType = await resolveProductLineForBatchTracker(mp);
 
   const userId = (session.user as { id?: string }).id;
   const trackerDetails = sanitizeTrackerDetailsFromBody(body.trackerDetails);

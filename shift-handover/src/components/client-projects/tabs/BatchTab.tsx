@@ -1,7 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Loader2, Edit2, Trash2, X, Save, TrendingUp, CheckCircle2, XCircle, SkipForward } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  Plus,
+  Loader2,
+  Edit2,
+  Trash2,
+  X,
+  Save,
+  TrendingUp,
+  CheckCircle2,
+  XCircle,
+  SkipForward,
+  Upload,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getBatchPhaseBadgeClass, resolveBatchPhaseLabel } from "@/lib/batch-tracker-options";
 import {
@@ -12,6 +24,7 @@ import {
   mergeTrackerDetails,
 } from "@/lib/batch-tracker-fieldsets";
 import { format } from "date-fns";
+import { parseBatchImportFile, type BatchImportPayload } from "@/lib/batch-import-mapper";
 
 interface BatchRun {
   id: string;
@@ -118,6 +131,36 @@ function buildEmptyForm(effectiveProductType: string | null): BatchFormState {
   };
 }
 
+function importPayloadToForm(p: BatchImportPayload, effectiveProductType: string): BatchFormState {
+  const fields = getTrackerFieldsForProductType(effectiveProductType);
+  const td = emptyTrackerState(fields);
+  if (p.trackerDetails) {
+    for (const f of fields) {
+      const v = p.trackerDetails[f.id];
+      if (v != null && String(v).trim() !== "") td[f.id] = String(v).trim();
+    }
+  }
+  return {
+    batchName: p.batchName,
+    batchNumber: p.batchNumber != null ? String(p.batchNumber) : "",
+    totalItems: String(p.totalItems),
+    migratedItems: String(p.migratedItems),
+    failedItems: String(p.failedItems),
+    skippedItems: String(p.skippedItems),
+    totalSizeGb: p.totalSizeGb != null ? String(p.totalSizeGb) : "",
+    migratedSizeGb: p.migratedSizeGb != null ? String(p.migratedSizeGb) : "",
+    plannedStartDate: p.plannedStartDate ?? "",
+    plannedEndDate: p.plannedEndDate ?? "",
+    actualStartDate: p.actualStartDate ?? "",
+    actualEndDate: p.actualEndDate ?? "",
+    status: p.status,
+    errorSummary: p.errorSummary ?? "",
+    notes: p.notes ?? "",
+    batchPhase: p.batchPhase ?? "",
+    trackerDetails: td,
+  };
+}
+
 function toInputDate(d: string | null) {
   if (!d) return "";
   try { return new Date(d).toISOString().split("T")[0]; } catch { return ""; }
@@ -140,17 +183,25 @@ function ProgressBar({ value, color }: { value: number; color: string }) {
 }
 
 export default function BatchTab({ clientId, effectiveProductType, currentUserRole, onCountChange }: Props) {
+  const fileImportRef = useRef<HTMLInputElement>(null);
   const [batches, setBatches] = useState<BatchRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<BatchFormState>(() => buildEmptyForm(null));
+  const [form, setForm] = useState<BatchFormState>(() => buildEmptyForm("CONTENT"));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [phaseFilter, setPhaseFilter] = useState("");
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState<BatchImportPayload[] | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [importModeLabel, setImportModeLabel] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
 
   const canEdit = currentUserRole === "ADMIN" || currentUserRole === "LEAD";
   const isAdmin = currentUserRole === "ADMIN";
+  /** When project has no migration paths / product type yet, batch tracker uses Content template (same as API default). */
+  const batchProductType = effectiveProductType ?? "CONTENT";
 
   useEffect(() => {
     setLoading(true);
@@ -175,12 +226,6 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
 
   async function handleSave() {
     if (!form.batchName.trim()) { setError("Batch name is required"); return; }
-    if (!effectiveProductType) {
-      setError(
-        "Cannot determine Content / Email / Message for this project. Set a migration type on the project (Edit project), or set product type if the migration is “Other”."
-      );
-      return;
-    }
     setSaving(true);
     setError("");
     try {
@@ -215,7 +260,7 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
         setBatches((b) => b.map((x) => (x.id === editingId ? data : x)));
         setEditingId(null);
         setShowForm(false);
-        setForm(buildEmptyForm(effectiveProductType));
+        setForm(buildEmptyForm(batchProductType));
       } else {
         const res = await fetch(`/api/client-projects/${clientId}/batches`, {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -228,7 +273,7 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
         setBatches((b) => [...b, data]);
         onCountChange(batches.length + 1);
         setShowForm(false);
-        setForm(buildEmptyForm(effectiveProductType));
+        setForm(buildEmptyForm(batchProductType));
       }
     } finally {
       setSaving(false);
@@ -241,24 +286,90 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
     if (res.ok) { setBatches((b) => b.filter((x) => x.id !== id)); onCountChange(batches.length - 1); }
   }
 
+  async function handleImportFilePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImportBusy(true);
+    setError("");
+    try {
+      const result = await parseBatchImportFile(file, batchProductType);
+      setImportPreview(result.rows);
+      setImportWarnings(result.warnings);
+      setImportModeLabel(result.mode === "keyvalue" ? "Label / value (two columns)" : "Table (header row + one row per batch)");
+      setImportModalOpen(true);
+      if (result.rows.length === 0) {
+        setError("No rows could be read. Use a header row matching Batch Name, Totals, etc., or two columns: label | value.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not read that file.");
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function confirmImportAll() {
+    if (!importPreview?.length) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/client-projects/${clientId}/batches/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runs: importPreview }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(typeof data.error === "string" ? data.error : "Import failed.");
+        return;
+      }
+      const created = data as BatchRun[];
+      setBatches((prev) => {
+        const next = [...prev, ...created].sort((a, b) => {
+          const na = a.batchNumber ?? 999999;
+          const nb = b.batchNumber ?? 999999;
+          if (na !== nb) return na - nb;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        });
+        onCountChange(next.length);
+        return next;
+      });
+      setImportModalOpen(false);
+      setImportPreview(null);
+      setImportWarnings([]);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function applyImportFirstRowToForm() {
+    const first = importPreview?.[0];
+    if (!first) return;
+    setForm(importPayloadToForm(first, batchProductType));
+    setEditingId(null);
+    setShowForm(true);
+    setImportModalOpen(false);
+    setImportPreview(null);
+    setImportWarnings([]);
+  }
+
   const inputClass = "w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-indigo-500";
   const labelClass = "text-xs text-gray-500 mb-1 block";
 
   return (
     <div className="space-y-5">
       {!effectiveProductType && canEdit && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p className="font-medium">Batch tracker needs a product line (Content / Email / Message)</p>
-          <p className="mt-1 text-amber-800/90">
-            Project status (e.g. Not Started) does <strong>not</strong> block batches. Open <strong>Edit Details</strong> and set a
-            {" "}<strong>migration type</strong> (e.g. Slack → Teams for messaging) so the app can pick the right template, or ensure
-            {" "}<strong>product type</strong> is stored on the project. After saving, refresh this page.
+        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+          <p className="font-medium text-gray-800">Optional: migration paths in Edit Details</p>
+          <p className="mt-1 text-gray-600">
+            There is no separate &quot;migration type&quot; field — use <strong>Migration paths</strong> in <strong>Edit Details</strong> (e.g. Slack → Teams) so batches use the matching <strong>Message / Email / Content</strong> tracker fields.
+            Until then, new batches use the <strong>Content</strong> layout by default; you can add paths later and edit batches if needed.
           </p>
         </div>
       )}
-      {effectiveProductType && canEdit && batches.length === 0 && (
+      {canEdit && batches.length === 0 && (
         <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
-          Numbers and dates are entered manually here — they are not imported automatically from Excel. Click <strong>Add Batch Run</strong>, enter at least a <strong>Batch name</strong>, then <strong>Create Batch</strong>.
+          Use <strong>Import CSV / Excel</strong> to load rows from your tracker file (header row + one row per batch, or two columns label/value). Or click <strong>Add Batch Run</strong> and enter fields manually.
         </p>
       )}
       {batches.length > 0 && (
@@ -306,22 +417,141 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
           />
         </div>
         {canEdit && (
-          <button
-            onClick={() => {
-              setForm(buildEmptyForm(effectiveProductType));
-              setEditingId(null);
-              setShowForm((v) => !v);
-            }}
-            disabled={!effectiveProductType}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-            {showForm ? "Cancel" : "Add Batch Run"}
-          </button>
+          <>
+            <input
+              ref={fileImportRef}
+              type="file"
+              accept=".csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+              className="hidden"
+              onChange={handleImportFilePick}
+            />
+            <button
+              type="button"
+              onClick={() => fileImportRef.current?.click()}
+              disabled={importBusy}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-indigo-700 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-60"
+            >
+              {importBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              Import CSV / Excel
+            </button>
+            <button
+              onClick={() => {
+                setForm(buildEmptyForm(batchProductType));
+                setEditingId(null);
+                setShowForm((v) => !v);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+            >
+              {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {showForm ? "Cancel" : "Add Batch Run"}
+            </button>
+          </>
         )}
       </div>
 
       {error && <p className="text-sm text-red-700 bg-red-50 px-4 py-2 rounded-lg">{error}</p>}
+
+      {importModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-gray-900">Import preview</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {(importPreview ?? []).length} batch{(importPreview ?? []).length !== 1 ? "es" : ""} · {importModeLabel}{" "}
+                  · product line <strong>{batchProductType}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setImportModalOpen(false);
+                  setImportPreview(null);
+                  setImportWarnings([]);
+                }}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {importWarnings.length > 0 && (
+              <div className="px-5 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-900">
+                {importWarnings.map((w) => (
+                  <p key={w}>{w}</p>
+                ))}
+              </div>
+            )}
+            <div className="overflow-auto flex-1 px-5 py-3">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-200 text-gray-600">
+                    <th className="py-2 pr-3 font-medium">Batch name</th>
+                    <th className="py-2 pr-3 font-medium">Total</th>
+                    <th className="py-2 pr-3 font-medium">Migrated</th>
+                    <th className="py-2 pr-3 font-medium">Failed</th>
+                    <th className="py-2 pr-3 font-medium">Status</th>
+                    <th className="py-2 pr-3 font-medium">Phase</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(importPreview ?? []).slice(0, 25).map((r, i) => (
+                    <tr key={i} className="border-b border-gray-100">
+                      <td className="py-2 pr-3 font-medium text-gray-900">{r.batchName}</td>
+                      <td className="py-2 pr-3 tabular-nums">{r.totalItems}</td>
+                      <td className="py-2 pr-3 tabular-nums">{r.migratedItems}</td>
+                      <td className="py-2 pr-3 tabular-nums">{r.failedItems}</td>
+                      <td className="py-2 pr-3">{r.status}</td>
+                      <td className="py-2 pr-3 max-w-[10rem] truncate" title={r.batchPhase ?? ""}>
+                        {r.batchPhase ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(importPreview ?? []).length > 25 && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Showing first 25 of {(importPreview ?? []).length} rows.
+                </p>
+              )}
+              {(importPreview ?? []).length === 0 && (
+                <p className="text-sm text-gray-500 py-6 text-center">No data rows parsed. Check the file format.</p>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t border-gray-200 flex flex-wrap gap-2 justify-end bg-gray-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setImportModalOpen(false);
+                  setImportPreview(null);
+                  setImportWarnings([]);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-white"
+              >
+                Cancel
+              </button>
+              {(importPreview ?? []).length >= 1 && (
+                <button
+                  type="button"
+                  onClick={applyImportFirstRowToForm}
+                  className="px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100"
+                >
+                  Fill form with first row
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={saving || (importPreview ?? []).length === 0}
+                onClick={confirmImportAll}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-60 flex items-center gap-2"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Import all ({(importPreview ?? []).length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {(showForm || editingId) && canEdit && (
         <div className="bg-white rounded-xl border border-indigo-200 shadow-sm p-5 space-y-4">
@@ -337,7 +567,11 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
             </div>
             <div className="col-span-2">
               <p className="text-xs text-gray-500">
-                Product line for this client: <strong>{effectiveProductType ?? "— set under Edit project —"}</strong>. Status and phase are free text — type whatever matches your tracker or process.
+                Product line for new/edited batches: <strong>{batchProductType}</strong>
+                {!effectiveProductType && (
+                  <span className="text-amber-700"> (default until you set migration paths in Edit Details)</span>
+                )}
+                . Status and phase are free text — type whatever matches your tracker or process.
               </p>
             </div>
             <div>
@@ -360,14 +594,14 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
                 className={inputClass}
               />
             </div>
-            {getTrackerFieldsForProductType(effectiveProductType).length > 0 && (
+            {getTrackerFieldsForProductType(batchProductType).length > 0 && (
               <div className="col-span-2 space-y-2 pt-2 border-t border-gray-100">
                 <p className="text-xs font-medium text-gray-700">Excel / sheet tracker fields</p>
                 <p className="text-xs text-gray-500">
                   Same row labels as your product tracker — enter counts or text (e.g. Number of CH: 2000).
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {getTrackerFieldsForProductType(effectiveProductType).map((field) => (
+                  {getTrackerFieldsForProductType(batchProductType).map((field) => (
                     <div key={field.id}>
                       <label className={labelClass}>{field.label}</label>
                       <input
@@ -451,7 +685,7 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
               onClick={() => {
                 setShowForm(false);
                 setEditingId(null);
-                setForm(buildEmptyForm(effectiveProductType));
+                setForm(buildEmptyForm(batchProductType));
               }}
               className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
@@ -498,8 +732,8 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
                       <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", statusPillClass(b.status))}>{b.status}</span>
                       <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{b.productType}</span>
                       {b.batchPhase && (
-                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium max-w-[14rem] truncate", getBatchPhaseBadgeClass(b.batchPhase))} title={resolveBatchPhaseLabel(b.batchPhase, effectiveProductType)}>
-                          {resolveBatchPhaseLabel(b.batchPhase, effectiveProductType)}
+                        <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium max-w-[14rem] truncate", getBatchPhaseBadgeClass(b.batchPhase))} title={resolveBatchPhaseLabel(b.batchPhase, b.productType)}>
+                          {resolveBatchPhaseLabel(b.batchPhase, b.productType)}
                         </span>
                       )}
                     </div>
@@ -533,7 +767,7 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
                             errorSummary: b.errorSummary ?? "",
                             notes: b.notes ?? "",
                             batchPhase: b.batchPhase ?? "",
-                            trackerDetails: mergeTrackerDetails(b.trackerDetails, effectiveProductType),
+                            trackerDetails: mergeTrackerDetails(b.trackerDetails, b.productType),
                           });
                           setEditingId(b.id);
                           setShowForm(false);
@@ -584,7 +818,7 @@ export default function BatchTab({ clientId, effectiveProductType, currentUserRo
                           .filter(([, v]) => v != null && String(v).trim() !== "")
                           .map(([k, v]) => (
                             <div key={k} className="sm:contents">
-                              <dt className="text-gray-500 sm:pr-2">{labelForTrackerId(k, effectiveProductType)}</dt>
+                              <dt className="text-gray-500 sm:pr-2">{labelForTrackerId(k, b.productType)}</dt>
                               <dd className="text-gray-900 font-medium tabular-nums">{String(v)}</dd>
                             </div>
                           ))}

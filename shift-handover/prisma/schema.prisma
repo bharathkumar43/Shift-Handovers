@@ -134,7 +134,9 @@ model ClientEntry {
   client           Client        @relation(fields: [clientId], references: [id])
   engineer         User?         @relation("EntryEngineer", fields: [engineerId], references: [id])
   engineerWorkedBy User?         @relation("EntryEngineerWorked", fields: [engineerWorkedUserId], references: [id])
-  filledBy         User?         @relation("EntryFiller", fields: [filledById], references: [id])
+  filledBy              User?                 @relation("EntryFiller", fields: [filledById], references: [id])
+  syncedHandoverIssue   MigrationIssue?
+  syncedHandoverTicket  MigrationProjectTicket?
 
   @@unique([shiftHandoverId, clientId])
 }
@@ -208,8 +210,9 @@ model MigrationProject {
   batchRuns        BatchRun[]
   comments         ProjectComment[]
   migrationTasks   MigrationTask[]
-  migrationItems   MigrationItem[]
-  migrationIssues  MigrationIssue[]
+  migrationItems           MigrationItem[]
+  migrationIssues          MigrationIssue[]
+  migrationProjectTickets  MigrationProjectTicket[]
 }
 
 model BatchRun {
@@ -349,20 +352,38 @@ model MigrationItem {
 }
 
 model MigrationIssue {
-  id                 String            @id @default(cuid())
-  migrationProjectId String
-  occurredAt         DateTime          @db.Date
-  description        String
-  l3TicketKey        String?
-  cfitsTicketKey     String?
-  ticketStatus       IssueTicketStatus @default(OPEN)
-  resolvedAt         DateTime?         @db.Date
-  resolution         String?
-  daysToSolve        Int?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  id                  String            @id @default(cuid())
+  migrationProjectId  String
+  /// When set, description is kept in sync from shift handover "Issues" for this client line
+  sourceClientEntryId String?           @unique
+  occurredAt          DateTime          @db.Date
+  description         String
+  l3TicketKey         String?
+  cfitsTicketKey      String?
+  ticketStatus        IssueTicketStatus @default(OPEN)
+  resolvedAt          DateTime?         @db.Date
+  resolution          String?
+  daysToSolve         Int?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
-  migrationProject MigrationProject @relation(fields: [migrationProjectId], references: [id], onDelete: Cascade)
+  migrationProject  MigrationProject @relation(fields: [migrationProjectId], references: [id], onDelete: Cascade)
+  sourceClientEntry ClientEntry?     @relation(fields: [sourceClientEntryId], references: [id], onDelete: Cascade)
+
+  @@index([migrationProjectId])
+}
+
+/// Snapshot of shift handover "Tickets" cell for this client line (kept in sync on handover save).
+model MigrationProjectTicket {
+  id                  String   @id @default(cuid())
+  migrationProjectId  String
+  sourceClientEntryId String   @unique
+  content             String   @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  migrationProject  MigrationProject @relation(fields: [migrationProjectId], references: [id], onDelete: Cascade)
+  sourceClientEntry   ClientEntry      @relation(fields: [sourceClientEntryId], references: [id], onDelete: Cascade)
 
   @@index([migrationProjectId])
 }

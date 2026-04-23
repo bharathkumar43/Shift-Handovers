@@ -32,10 +32,15 @@ export function getShiftLabel(shiftNumber: number): string {
   }
 }
 
-/** Empty assignedShifts = eligible for all shifts. */
+/** User appears on a shift only if that shift is checked for them in Manage Users (empty = not eligible). */
 export function userWorksShift(assignedShifts: number[], shiftNumber: number): boolean {
-  if (!assignedShifts?.length) return true;
+  if (!assignedShifts?.length) return false;
   return assignedShifts.includes(shiftNumber);
+}
+
+/** At least one shift selected — required to appear in non–shift-scoped user dropdowns (e.g. project manager). */
+export function userHasShiftAssignments(assignedShifts: number[] | null | undefined): boolean {
+  return (assignedShifts?.length ?? 0) > 0;
 }
 
 /** Compact row-tint labels (first letter per color). */

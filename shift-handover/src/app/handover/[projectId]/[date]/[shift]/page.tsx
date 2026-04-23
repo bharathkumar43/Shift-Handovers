@@ -12,6 +12,7 @@ import {
   getRowTintSelectClass,
   getRowTintBackgroundClass,
 } from "@/lib/utils";
+import TicketLinksDisplay from "@/components/TicketLinksDisplay";
 
 interface Client {
   id: string;
@@ -89,6 +90,8 @@ export default function HandoverFormPage({
   const [engineerAck, setEngineerAck] = useState<{ acknowledged: boolean; by: string | null; at: string | null }>({ acknowledged: false, by: null, at: null });
   const [managerAck, setManagerAck] = useState<{ acknowledged: boolean; by: string | null; at: string | null }>({ acknowledged: false, by: null, at: null });
   const [acknowledging, setAcknowledging] = useState(false);
+  /** Tickets: show one surface — links when not editing; textarea while empty or editing */
+  const [ticketsEditClientId, setTicketsEditClientId] = useState<string | null>(null);
 
   const userRole = (session?.user as { role?: string })?.role;
   const isAdmin = userRole === "ADMIN";
@@ -100,10 +103,14 @@ export default function HandoverFormPage({
     async (opts?: { silent?: boolean }) => {
       if (!opts?.silent) setLoading(true);
       try {
+        const noStore = { cache: "no-store" as const };
         const [projectsRes, usersRes, handoverRes] = await Promise.all([
-          fetch("/api/projects"),
-          fetch("/api/users"),
-          fetch(`/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(shift)}`),
+          fetch("/api/projects", noStore),
+          fetch("/api/users", noStore),
+          fetch(
+            `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(shift)}`,
+            noStore
+          ),
         ]);
 
         const projects = await projectsRes.json();
@@ -186,7 +193,8 @@ export default function HandoverFormPage({
         const prevShift = parseInt(shift, 10) - 1;
         if (prevShift >= 1) {
           const prevRes = await fetch(
-            `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(String(prevShift))}`
+            `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(String(prevShift))}`,
+            { cache: "no-store" }
           );
           const prevData = prevRes.ok ? await prevRes.json() : null;
           if (prevData?.entries) {
@@ -263,9 +271,17 @@ export default function HandoverFormPage({
       });
 
       if (res.ok) {
+        const data = await res.json();
         await loadHandoverPage({ silent: true });
-        setSaveMessage(submit ? "Submitted successfully!" : "Saved as draft");
-        setTimeout(() => setSaveMessage(""), 3000);
+        const base = submit ? "Submitted successfully!" : "Saved as draft.";
+        const warns = Array.isArray(data.syncWarnings) ? data.syncWarnings : [];
+        if (warns.length > 0) {
+          setSaveMessage(`${base}\n\n${warns.join("\n\n")}`);
+          setTimeout(() => setSaveMessage(""), 12000);
+        } else {
+          setSaveMessage(base);
+          setTimeout(() => setSaveMessage(""), 3000);
+        }
       } else {
         const errorData = await res.json().catch(() => null);
         setSaveMessage(errorData?.error || "Error saving. Please try again.");
@@ -322,27 +338,17 @@ export default function HandoverFormPage({
   const shiftNum = parseInt(shift, 10) || 1;
   const nextShiftNum = shiftNum >= 3 ? 1 : shiftNum + 1;
 
-  const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
-
   const engineerWorkedOptions = useMemo(() => {
-    const selectedIds = entries.map((e) => e.engineerWorkedUserId).filter(Boolean) as string[];
-    const base = users.filter((u) => userWorksShift(u.assignedShifts ?? [], shiftNum));
-    const out = new Map(base.map((u) => [u.id, u]));
-    for (const id of selectedIds) {
-      if (!out.has(id) && usersById.has(id)) out.set(id, usersById.get(id)!);
-    }
-    return Array.from(out.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [users, entries, shiftNum, usersById]);
+    return users
+      .filter((u) => userWorksShift(u.assignedShifts ?? [], shiftNum))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [users, shiftNum]);
 
   const nextEngineerOptions = useMemo(() => {
-    const selectedIds = entries.map((e) => e.engineerId).filter(Boolean) as string[];
-    const base = users.filter((u) => userWorksShift(u.assignedShifts ?? [], nextShiftNum));
-    const out = new Map(base.map((u) => [u.id, u]));
-    for (const id of selectedIds) {
-      if (!out.has(id) && usersById.has(id)) out.set(id, usersById.get(id)!);
-    }
-    return Array.from(out.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [users, entries, nextShiftNum, usersById]);
+    return users
+      .filter((u) => userWorksShift(u.assignedShifts ?? [], nextShiftNum))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [users, nextShiftNum]);
 
   if (loading) {
     return (
@@ -391,10 +397,12 @@ export default function HandoverFormPage({
           {saveMessage && (
             <span
               className={cn(
-                "text-sm px-3 py-1 rounded-full",
+                "text-sm px-3 py-2 rounded-lg max-w-xl whitespace-pre-wrap",
                 saveMessage.includes("Error") || saveMessage.includes("Only")
                   ? "bg-red-100 text-red-700"
-                  : "bg-green-100 text-green-700"
+                  : saveMessage.includes("Migration project sync")
+                    ? "bg-amber-50 text-amber-900 border border-amber-200"
+                    : "bg-green-100 text-green-700"
               )}
             >
               {saveMessage}
@@ -490,20 +498,36 @@ export default function HandoverFormPage({
       {/* Entries Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full table-auto text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[200px] sticky left-0 bg-gray-50 z-10">
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom sticky left-0 z-10 bg-gray-50 shadow-[2px_0_0_0_rgb(243_244_246)] max-w-[16rem] min-w-0">
                   Client
                 </th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 w-[140px]">Tickets</th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 w-[120px]">Status</th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 w-[130px]">Engineer Worked</th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[180px]">Issues</th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[180px]">Updates</th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[180px]">Engineer Notes</th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 min-w-[180px]">Manager Notes</th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 w-[150px]">Next Shift Engineer</th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
+                  Tickets
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
+                  Status
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[14rem] min-w-0">
+                  Engineer Worked
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
+                  Issues
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
+                  Updates
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
+                  Engineer Notes
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
+                  Manager Notes
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[14rem] min-w-0">
+                  Next Shift Engineer
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -523,67 +547,97 @@ export default function HandoverFormPage({
                   >
                     <td
                       className={cn(
-                        "px-3 py-2 font-medium text-gray-900 sticky left-0 z-10 border-r border-gray-100/80",
+                        "px-3 py-2 align-top font-medium text-gray-900 sticky left-0 z-10 border-r border-gray-100/80 max-w-[16rem] min-w-0",
                         rowBg || (idx % 2 === 0 ? "bg-white" : "bg-gray-50/30")
                       )}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        {canSubmit && !isSubmitted && (
-                          <span
-                            className={cn(
-                              "w-2 h-2 rounded-full shrink-0",
-                              filled ? "bg-green-500" : "bg-amber-400"
-                            )}
-                          />
-                        )}
-                        <span className="truncate flex-1 min-w-0">{entry.clientName}</span>
-                        <a
-                          href={`/client-projects/${entry.clientId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="View migration project"
-                          className="shrink-0 text-gray-400 hover:text-indigo-600 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                        <select
-                          value={entry.rowTint}
-                          onChange={(e) => updateEntry(entry.clientId, "rowTint", e.target.value)}
-                          disabled={!isAdmin}
-                          className={cn(
-                            "shrink-0 w-[2.5rem] max-w-[2.5rem] text-center text-[11px] leading-tight py-0.5 pl-0 pr-4 rounded border shadow-sm",
-                            getRowTintSelectClass(entry.rowTint),
-                            !isAdmin && "cursor-not-allowed opacity-95"
+                      <div className="flex flex-nowrap items-start gap-3">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+                          {canSubmit && !isSubmitted && (
+                            <span
+                              className={cn(
+                                "w-2 h-2 rounded-full shrink-0",
+                                filled ? "bg-green-500" : "bg-amber-400"
+                              )}
+                            />
                           )}
-                          title={isAdmin ? "Row highlight (admin)" : "Row highlight"}
-                          aria-label="Row highlight color"
-                        >
-                          {ROW_TINT_OPTIONS.map((opt) => (
-                            <option key={opt.value || "none"} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
+                          <span className="break-words min-w-0">{entry.clientName}</span>
+                          <a
+                            href={`/client-projects/${entry.clientId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="View migration project"
+                            className="shrink-0 text-gray-400 hover:text-indigo-600 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                        <div className="shrink-0 pt-0.5 border-l border-gray-200 pl-3 ml-0.5">
+                          <select
+                            value={entry.rowTint}
+                            onChange={(e) => updateEntry(entry.clientId, "rowTint", e.target.value)}
+                            disabled={!isAdmin}
+                            className={cn(
+                              "w-[2.5rem] max-w-[2.5rem] text-center text-[11px] leading-tight py-0.5 pl-0 pr-4 rounded border shadow-sm block",
+                              getRowTintSelectClass(entry.rowTint),
+                              !isAdmin && "cursor-not-allowed opacity-95"
+                            )}
+                            title={isAdmin ? "Row highlight (admin)" : "Row highlight"}
+                            aria-label="Row highlight color"
+                          >
+                            {ROW_TINT_OPTIONS.map((opt) => (
+                              <option key={opt.value || "none"} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={entry.tickets}
-                        onChange={(e) => updateEntry(entry.clientId, "tickets", e.target.value)}
-                        disabled={isSubmitted}
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 text-gray-900"
-                        placeholder="Ticket IDs"
-                      />
+                    <td className="px-3 py-2 align-top max-w-[22rem] min-w-0">
+                      {isSubmitted ? (
+                        <TicketLinksDisplay text={entry.tickets} />
+                      ) : ticketsEditClientId === entry.clientId || !entry.tickets.trim() ? (
+                        <textarea
+                          value={entry.tickets}
+                          onChange={(e) => updateEntry(entry.clientId, "tickets", e.target.value)}
+                          onBlur={() => setTicketsEditClientId(null)}
+                          disabled={isSubmitted}
+                          rows={2}
+                          autoFocus={ticketsEditClientId === entry.clientId}
+                          className="box-border w-full min-w-0 max-w-full min-h-[2.75rem] [field-sizing:content] px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100 resize-y text-gray-900 break-words"
+                          placeholder="Paste full links (https://…) — separate with commas or new lines"
+                        />
+                      ) : (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            if ((e.target as HTMLElement).closest("a")) return;
+                            setTicketsEditClientId(entry.clientId);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setTicketsEditClientId(entry.clientId);
+                            }
+                          }}
+                          className="box-border block w-full min-w-0 min-h-[2.75rem] max-w-full px-2 py-1.5 border border-gray-200 rounded text-sm text-left bg-white hover:bg-gray-50 hover:border-indigo-200 transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-text break-words"
+                          title="Click outside a link to edit"
+                          aria-label="Tickets — click to edit"
+                        >
+                          <TicketLinksDisplay text={entry.tickets} />
+                        </div>
+                      )}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top max-w-[11rem] min-w-0">
                       <select
                         value={entry.status}
                         onChange={(e) => updateEntry(entry.clientId, "status", e.target.value)}
                         disabled={isSubmitted}
                         className={cn(
-                          "w-full px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:opacity-60",
+                          "box-border w-full min-w-0 max-w-full truncate px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:opacity-60",
                           getStatusColor(entry.status)
                         )}
                       >
@@ -594,7 +648,7 @@ export default function HandoverFormPage({
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top max-w-[14rem] min-w-0">
                       <div className="space-y-1">
                         <select
                           value={entry.engineerWorkedUserId}
@@ -609,7 +663,7 @@ export default function HandoverFormPage({
                             );
                           }}
                           disabled={isSubmitted}
-                          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 text-gray-900"
+                          className="box-border w-full min-w-0 max-w-full truncate px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 text-gray-900"
                         >
                           <option value="">Select...</option>
                           {engineerWorkedOptions.map((u) => (
@@ -625,44 +679,44 @@ export default function HandoverFormPage({
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top max-w-[22rem] min-w-0">
                       <textarea
                         value={entry.issues}
                         onChange={(e) => updateEntry(entry.clientId, "issues", e.target.value)}
                         disabled={isSubmitted}
                         rows={1}
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 resize-y text-gray-900"
+                        className="box-border w-full min-w-0 max-w-full min-h-[2.5rem] [field-sizing:content] px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 resize-y text-gray-900 break-words"
                         placeholder="Any issues..."
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top max-w-[22rem] min-w-0">
                       <textarea
                         value={entry.updates}
                         onChange={(e) => updateEntry(entry.clientId, "updates", e.target.value)}
                         disabled={isSubmitted}
                         rows={1}
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 resize-y text-gray-900"
+                        className="box-border w-full min-w-0 max-w-full min-h-[2.5rem] [field-sizing:content] px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 resize-y text-gray-900 break-words"
                         placeholder="Updates..."
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top max-w-[22rem] min-w-0">
                       <textarea
                         value={entry.handoverNotes}
                         onChange={(e) => updateEntry(entry.clientId, "handoverNotes", e.target.value)}
                         disabled={isSubmitted}
                         rows={1}
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 resize-y text-gray-900"
+                        className="box-border w-full min-w-0 max-w-full min-h-[2.5rem] [field-sizing:content] px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 resize-y text-gray-900 break-words"
                         placeholder="Engineer notes..."
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top max-w-[22rem] min-w-0">
                       <textarea
                         value={entry.managerNotes}
                         onChange={(e) => updateEntry(entry.clientId, "managerNotes", e.target.value)}
                         disabled={!isAdmin}
                         rows={1}
                         className={cn(
-                          "w-full px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 resize-y text-gray-900",
+                          "box-border w-full min-w-0 max-w-full min-h-[2.5rem] [field-sizing:content] px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 resize-y text-gray-900 break-words",
                           isAdmin
                             ? "border-purple-200 bg-purple-50/30 focus:border-purple-500 focus:ring-purple-500"
                             : "border-gray-200 bg-gray-100 cursor-not-allowed"
@@ -670,12 +724,12 @@ export default function HandoverFormPage({
                         placeholder={isAdmin ? "Manager notes..." : "Manager only"}
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top max-w-[14rem] min-w-0">
                       <select
                         value={entry.engineerId}
                         onChange={(e) => updateEntry(entry.clientId, "engineerId", e.target.value)}
                         disabled={isSubmitted}
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 text-gray-900"
+                        className="box-border w-full min-w-0 max-w-full truncate px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 text-gray-900"
                       >
                         <option value="">Select...</option>
                         {nextEngineerOptions.map((u) => (

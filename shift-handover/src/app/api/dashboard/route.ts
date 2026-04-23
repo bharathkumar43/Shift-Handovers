@@ -4,9 +4,20 @@ import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { dateParamToDbDate } from "@/lib/db-date";
 
+export const dynamic = "force-dynamic";
+
+const NO_STORE = { "Cache-Control": "private, no-store, must-revalidate" } as const;
+
+function json(data: unknown, init?: ResponseInit) {
+  return NextResponse.json(data, {
+    ...init,
+    headers: { ...NO_STORE, ...(init?.headers as Record<string, string> | undefined) },
+  });
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
@@ -50,7 +61,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({
+  return json({
     handovers,
     dailyDashboard,
     metrics: { totalTickets, openIssues, resolved },
@@ -59,7 +70,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   const { date, dutyManager, week, keyIssues, actionsForTomorrow } = body;
@@ -71,5 +82,5 @@ export async function POST(req: NextRequest) {
     create: { date: day, dutyManager, week, keyIssues, actionsForTomorrow },
   });
 
-  return NextResponse.json(dashboard);
+  return json(dashboard);
 }

@@ -3,6 +3,20 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { dateParamToDbDate } from "@/lib/db-date";
+import { upsertMigrationIssueFromClientEntry } from "@/lib/handover-migration-issue-sync";
+import { upsertMigrationTicketFromClientEntry } from "@/lib/handover-migration-ticket-sync";
+
+/** Prevent CDN/proxy/browser from serving stale handover JSON to different users */
+export const dynamic = "force-dynamic";
+
+const NO_STORE = { "Cache-Control": "private, no-store, must-revalidate" } as const;
+
+function json(data: unknown, init?: ResponseInit) {
+  return NextResponse.json(data, {
+    ...init,
+    headers: { ...NO_STORE, ...(init?.headers as Record<string, string> | undefined) },
+  });
+}
 
 function parseRowTint(v: unknown): "RED" | "AMBER" | "SILVER" | "GREEN" | null {
   if (v === null || v === undefined || v === "") return null;
@@ -10,9 +24,21 @@ function parseRowTint(v: unknown): "RED" | "AMBER" | "SILVER" | "GREEN" | null {
   return null;
 }
 
+/** User-facing hint when migration-project sync fails (often stale Prisma client or missing migration). */
+function migrationSyncErrorHint(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("Unknown argument") || msg.includes("Unknown field")) {
+    return "Migration project sync did not run: the Prisma client is out of date. Stop npm run dev, then run npx prisma migrate deploy and npx prisma generate, then start the app again. (Windows: EPERM on generate means the dev server is still running.)";
+  }
+  if (/column .* does not exist|does not exist.*column|P2022/i.test(msg)) {
+    return "Migration project sync failed: database is missing a column. Run npx prisma migrate deploy, then npx prisma generate (dev server stopped).";
+  }
+  return `Migration project sync failed: ${msg.slice(0, 220)}`;
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
@@ -20,12 +46,12 @@ export async function GET(req: NextRequest) {
   const shiftNumber = searchParams.get("shiftNumber");
 
   if (!date || !projectId || !shiftNumber) {
-    return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+    return json({ error: "Missing parameters" }, { status: 400 });
   }
 
   const shiftNum = parseInt(String(shiftNumber), 10);
   if (Number.isNaN(shiftNum)) {
-    return NextResponse.json({ error: "Invalid shift number" }, { status: 400 });
+    return json({ error: "Invalid shift number" }, { status: 400 });
   }
 
   const handover = await prisma.shiftHandover.findUnique({
@@ -52,7 +78,7 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  return NextResponse.json(handover);
+  return json(handover);
 }
 
 function entryHasData(entry: {
@@ -79,24 +105,25 @@ function entryHasData(entry: {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   const { date, projectId, shiftNumber, leadNotes, entries, submit } = body;
 
   if (!date || !projectId || shiftNumber === undefined || shiftNumber === null) {
-    return NextResponse.json({ error: "Missing date, projectId, or shiftNumber" }, { status: 400 });
+    return json({ error: "Missing date, projectId, or shiftNumber" }, { status: 400 });
   }
 
   const shiftNum = parseInt(String(shiftNumber), 10);
   if (Number.isNaN(shiftNum)) {
-    return NextResponse.json({ error: "Invalid shift number" }, { status: 400 });
+    return json({ error: "Invalid shift number" }, { status: 400 });
   }
 
   const isAdmin = session.user.role === "ADMIN";
+  const isLeadOrAdmin = session.user.role === "ADMIN" || session.user.role === "LEAD";
 
   if (submit && session.user.role === "ENGINEER") {
-    return NextResponse.json(
+    return json(
       { error: "Only Shift Leads and Admins can submit handovers" },
       { status: 403 }
     );
@@ -121,7 +148,7 @@ export async function POST(req: NextRequest) {
       projectId,
       shiftNumber: shiftNum,
       leadNotes,
-      leadId: session.user.id,
+      leadId: isLeadOrAdmin ? session.user.id : null,
       status: submit ? "SUBMITTED" : "DRAFT",
       submittedById: submit ? session.user.id : undefined,
       submittedAt: submit ? new Date() : undefined,
@@ -167,7 +194,7 @@ export async function POST(req: NextRequest) {
 
       const rowTintPayload = isAdmin ? parseRowTint(entry.rowTint) : undefined;
 
-      await prisma.clientEntry.upsert({
+      const savedEntry = await prisma.clientEntry.upsert({
         where: {
           shiftHandoverId_clientId: {
             shiftHandoverId: handover.id,
@@ -207,6 +234,25 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const handoverEntryIds = await prisma.clientEntry.findMany({
+      where: { shiftHandoverId: handover.id },
+      select: { id: true },
+    });
+    for (const { id: ceId } of handoverEntryIds) {
+      try {
+        await upsertMigrationIssueFromClientEntry(ceId);
+      } catch (e) {
+        console.error("[handover] migration issue sync failed", ceId, e);
+        syncWarningSet.add(migrationSyncErrorHint(e));
+      }
+      try {
+        await upsertMigrationTicketFromClientEntry(ceId);
+      } catch (e) {
+        console.error("[handover] migration ticket sync failed", ceId, e);
+        syncWarningSet.add(migrationSyncErrorHint(e));
+      }
+    }
+
     // Reset acknowledgements when their respective notes change
     const ackReset: Record<string, unknown> = {};
     if (engineerNotesChanged && handover.engineerAcknowledged) {
@@ -243,18 +289,25 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return NextResponse.json(result);
+  const syncWarnings = [...syncWarningSet];
+  if (!result) {
+    return json({ error: "Handover not found after save" }, { status: 500 });
+  }
+  if (syncWarnings.length > 0) {
+    return json({ ...result, syncWarnings });
+  }
+  return json(result);
 }
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) return json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   const { handoverId, action } = body;
 
   if (!handoverId || !action) {
-    return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+    return json({ error: "Missing parameters" }, { status: 400 });
   }
 
   const handover = await prisma.shiftHandover.findUnique({
@@ -263,12 +316,12 @@ export async function PATCH(req: NextRequest) {
   });
 
   if (!handover) {
-    return NextResponse.json({ error: "Handover not found" }, { status: 404 });
+    return json({ error: "Handover not found" }, { status: 404 });
   }
 
   if (action === "engineer_acknowledge") {
     if (session.user.role !== "LEAD" && session.user.role !== "ADMIN") {
-      return NextResponse.json(
+      return json(
         { error: "Only Shift Leads and Admins can acknowledge engineer notes" },
         { status: 403 }
       );
@@ -276,7 +329,7 @@ export async function PATCH(req: NextRequest) {
     const allEngineerNotesFilled = handover.entries.length > 0 &&
       handover.entries.every((e) => !!e.handoverNotes);
     if (!allEngineerNotesFilled) {
-      return NextResponse.json({ error: "All engineer notes must be filled before acknowledging" }, { status: 400 });
+      return json({ error: "All engineer notes must be filled before acknowledging" }, { status: 400 });
     }
     await prisma.shiftHandover.update({
       where: { id: handoverId },
@@ -288,12 +341,12 @@ export async function PATCH(req: NextRequest) {
     });
   } else if (action === "manager_acknowledge") {
     if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only managers/admins can acknowledge manager notes" }, { status: 403 });
+      return json({ error: "Only managers/admins can acknowledge manager notes" }, { status: 403 });
     }
     const allManagerNotesFilled = handover.entries.length > 0 &&
       handover.entries.every((e) => !!e.managerNotes);
     if (!allManagerNotesFilled) {
-      return NextResponse.json({ error: "All manager notes must be filled before acknowledging" }, { status: 400 });
+      return json({ error: "All manager notes must be filled before acknowledging" }, { status: 400 });
     }
     await prisma.shiftHandover.update({
       where: { id: handoverId },
@@ -304,7 +357,7 @@ export async function PATCH(req: NextRequest) {
       },
     });
   } else {
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    return json({ error: "Invalid action" }, { status: 400 });
   }
 
   const result = await prisma.shiftHandover.findUnique({
@@ -323,5 +376,5 @@ export async function PATCH(req: NextRequest) {
     },
   });
 
-  return NextResponse.json(result);
+  return json(result);
 }

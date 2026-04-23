@@ -207,7 +207,10 @@ export default function ManageUsersPage() {
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500 mb-1">Shifts covered</label>
-              <p className="text-xs text-gray-400 mb-2">Leave none selected to allow all shifts in handover dropdowns.</p>
+              <p className="text-xs text-gray-500 mb-2">
+                Select each shift this person may work. They only appear in handover and other user dropdowns for shifts
+                you check here. None selected means they are hidden from those lists.
+              </p>
               <div className="flex flex-wrap gap-3">
                 {SHIFT_NUMS.map((sn) => (
                   <label key={sn} className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
@@ -297,7 +300,9 @@ export default function ManageUsersPage() {
                     ))}
                   </div>
                   {(!user.assignedShifts || user.assignedShifts.length === 0) && (
-                    <p className="text-[10px] text-gray-400 mt-1">All shifts</p>
+                    <p className="text-[10px] text-amber-700 mt-1">
+                      No shifts — hidden from handover and user dropdowns until at least one is selected.
+                    </p>
                   )}
                 </td>
                 <td className="px-6 py-3">

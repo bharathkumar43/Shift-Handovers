@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Save, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, userHasShiftAssignments } from "@/lib/utils";
 
 interface MigrationTypeOption {
   id: string;
@@ -19,7 +19,7 @@ const MIGRATION_PHASES = [
   { value: "COMPLETED", label: "Completed" },
 ];
 
-interface User { id: string; name: string; }
+interface User { id: string; name: string; assignedShifts?: number[]; }
 interface MigrationProject {
   id: string;
   status: string;
@@ -172,6 +172,8 @@ export default function ProjectEditForm({ clientId, migrationProject, users, cur
   const inputClass = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500";
   const labelClass = "block text-xs font-medium text-gray-600 mb-1";
 
+  const projectManagerCandidates = users.filter((u) => userHasShiftAssignments(u.assignedShifts));
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/30" />
@@ -191,7 +193,9 @@ export default function ProjectEditForm({ clientId, migrationProject, users, cur
             <label className={labelClass}>Project Manager</label>
             <select value={form.projectManagerId} onChange={(e) => setForm((f) => ({ ...f, projectManagerId: e.target.value }))} className={inputClass}>
               <option value="">— Not assigned —</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              {projectManagerCandidates.map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
             </select>
           </div>
 

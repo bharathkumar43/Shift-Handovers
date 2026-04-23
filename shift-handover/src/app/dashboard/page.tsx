@@ -55,6 +55,8 @@ interface DashboardData {
 export default function DashboardPage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [data, setData] = useState<DashboardData | null>(null);
+  /** Project names from DB so the grid matches renamed projects (not hardcoded strings). */
+  const [dashboardProjectNames, setDashboardProjectNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [managerNotes, setManagerNotes] = useState({
     dutyManager: "",
@@ -66,10 +68,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/dashboard?date=${date}`)
-      .then((r) => r.json())
-      .then((d) => {
+    const noStore = { cache: "no-store" as const };
+    Promise.all([
+      fetch(`/api/dashboard?date=${date}`, noStore),
+      fetch("/api/projects", noStore),
+    ])
+      .then(([dashRes, projRes]) => Promise.all([dashRes.json(), projRes.json()]))
+      .then(([d, projects]) => {
         setData(d);
+        setDashboardProjectNames(
+          Array.isArray(projects) ? projects.map((p: { name: string }) => p.name) : []
+        );
         if (d.dailyDashboard) {
           setManagerNotes({
             dutyManager: d.dailyDashboard.dutyManager || "",
@@ -111,8 +120,6 @@ export default function DashboardPage() {
       lead: handover.lead?.name || "-",
     };
   };
-
-  const projects = ["Content", "Email", "Messaging"];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -216,7 +223,7 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {projects.map((proj) => (
+                  {dashboardProjectNames.map((proj) => (
                     <tr key={proj} className="border-b border-gray-100">
                       <td className="px-6 py-3 font-medium text-gray-900">
                         <div className="flex items-center gap-2">
