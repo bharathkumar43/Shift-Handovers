@@ -70,7 +70,7 @@ export default function DashboardPage() {
     setLoading(true);
     const noStore = { cache: "no-store" as const };
     Promise.all([
-      fetch(`/api/dashboard?date=${date}`, noStore),
+      fetch(`/api/dashboard?date=${encodeURIComponent(date)}&_t=${Date.now()}`, noStore),
       fetch("/api/projects", noStore),
     ])
       .then(([dashRes, projRes]) => Promise.all([dashRes.json(), projRes.json()]))

@@ -1,2 +1,2 @@
-/** Inactivity duration before automatic sign-out (10 minutes) */
-export const IDLE_LOGOUT_MS = 10 * 60 * 1000;
+/** Inactivity duration before automatic sign-out (2 hours) */
+export const IDLE_LOGOUT_MS = 2 * 60 * 60 * 1000;

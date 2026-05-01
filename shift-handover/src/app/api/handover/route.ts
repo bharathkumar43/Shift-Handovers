@@ -9,12 +9,21 @@ import { upsertMigrationTicketFromClientEntry } from "@/lib/handover-migration-t
 /** Prevent CDN/proxy/browser from serving stale handover JSON to different users */
 export const dynamic = "force-dynamic";
 
-const NO_STORE = { "Cache-Control": "private, no-store, must-revalidate" } as const;
+const HANDOVER_NO_CACHE = {
+  "Cache-Control":
+    "private, no-store, no-cache, must-revalidate, max-age=0, proxy-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+} as const satisfies Record<string, string>;
 
 function json(data: unknown, init?: ResponseInit) {
+  const merged = {
+    ...HANDOVER_NO_CACHE,
+    ...(init?.headers as Record<string, string> | undefined),
+  };
   return NextResponse.json(data, {
     ...init,
-    headers: { ...NO_STORE, ...(init?.headers as Record<string, string> | undefined) },
+    headers: merged,
   });
 }
 
@@ -34,6 +43,12 @@ function migrationSyncErrorHint(err: unknown): string {
     return "Migration project sync failed: database is missing a column. Run npx prisma migrate deploy, then npx prisma generate (dev server stopped).";
   }
   return `Migration project sync failed: ${msg.slice(0, 220)}`;
+}
+
+function parseExpectedDate(value: unknown): Date | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 export async function GET(req: NextRequest) {
@@ -108,7 +123,7 @@ export async function POST(req: NextRequest) {
   if (!session) return json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { date, projectId, shiftNumber, leadNotes, entries, submit } = body;
+  const { date, projectId, shiftNumber, leadNotes, entries, submit, handoverExpectedUpdatedAt } = body;
 
   if (!date || !projectId || shiftNumber === undefined || shiftNumber === null) {
     return json({ error: "Missing date, projectId, or shiftNumber" }, { status: 400 });
@@ -130,6 +145,62 @@ export async function POST(req: NextRequest) {
   }
 
   const syncWarningSet = new Set<string>();
+
+  const existingHandover = await prisma.shiftHandover.findUnique({
+    where: {
+      date_projectId_shiftNumber: {
+        date: dateParamToDbDate(date),
+        projectId,
+        shiftNumber: shiftNum,
+      },
+    },
+    include: {
+      entries: { select: { clientId: true, updatedAt: true } },
+    },
+  });
+
+  const expectedHandoverUpdatedAt = parseExpectedDate(handoverExpectedUpdatedAt);
+  if (
+    existingHandover &&
+    expectedHandoverUpdatedAt &&
+    existingHandover.updatedAt.getTime() !== expectedHandoverUpdatedAt.getTime()
+  ) {
+    return json(
+      {
+        error:
+          "This handover was updated by someone else while you were editing. Please review the latest data and save again.",
+      },
+      { status: 409 }
+    );
+  }
+
+  if (entries && Array.isArray(entries) && existingHandover) {
+    const existingEntriesByClient = new Map(
+      existingHandover.entries.map((e) => [e.clientId, e.updatedAt.getTime()])
+    );
+    const conflicts: string[] = [];
+
+    for (const entry of entries) {
+      if (!entry?.clientId) continue;
+      const expected = parseExpectedDate(entry.expectedUpdatedAt);
+      if (!expected) continue;
+      const currentTs = existingEntriesByClient.get(entry.clientId);
+      if (currentTs === undefined || currentTs !== expected.getTime()) {
+        conflicts.push(entry.clientId);
+      }
+    }
+
+    if (conflicts.length > 0) {
+      return json(
+        {
+          error:
+            "Some rows changed while you were editing. Please review the latest data and save again.",
+          conflicts,
+        },
+        { status: 409 }
+      );
+    }
+  }
 
   const handover = await prisma.shiftHandover.upsert({
     where: {

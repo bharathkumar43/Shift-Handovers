@@ -6,12 +6,21 @@ import { dateParamToDbDate } from "@/lib/db-date";
 
 export const dynamic = "force-dynamic";
 
-const NO_STORE = { "Cache-Control": "private, no-store, must-revalidate" } as const;
+const DASHBOARD_NO_CACHE = {
+  "Cache-Control":
+    "private, no-store, no-cache, must-revalidate, max-age=0, proxy-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+} as const satisfies Record<string, string>;
 
 function json(data: unknown, init?: ResponseInit) {
+  const merged = {
+    ...DASHBOARD_NO_CACHE,
+    ...(init?.headers as Record<string, string> | undefined),
+  };
   return NextResponse.json(data, {
     ...init,
-    headers: { ...NO_STORE, ...(init?.headers as Record<string, string> | undefined) },
+    headers: merged,
   });
 }
 

@@ -170,7 +170,7 @@ export default function HistoryPage() {
                 <div className="flex items-center gap-4">
                   <div>
                     <span className="font-semibold text-gray-900">
-                      {new Date(h.date + "T00:00:00").toLocaleDateString("en-US", {
+                      {new Date(h.date.substring(0, 10) + "T00:00:00").toLocaleDateString("en-US", {
                         weekday: "short",
                         month: "short",
                         day: "numeric",

@@ -95,7 +95,7 @@ export default function HandoverHistoryTab({ clientId }: Props) {
                   onClick={() => setExpandedId(expanded ? null : h.id)}
                 >
                   <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <span className="font-semibold text-gray-900">{format(new Date(h.date), "EEE, MMM d, yyyy")}</span>
+                    <span className="font-semibold text-gray-900">{format(new Date(h.date.substring(0, 10) + "T00:00:00"), "EEE, MMM d, yyyy")}</span>
                     <span className="text-sm text-gray-500">{h.project.name}</span>
                     <span className="text-sm text-gray-500">{shiftLabel(h.shiftNumber)}</span>
                     <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", h.status === "SUBMITTED" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700")}>

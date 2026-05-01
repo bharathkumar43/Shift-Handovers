@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, use, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck, ExternalLink } from "lucide-react";
 import {
@@ -28,6 +29,8 @@ interface User {
 interface EntryData {
   clientId: string;
   clientName: string;
+  /** Server row version for optimistic concurrency checks */
+  sourceUpdatedAt: string | null;
   tickets: string;
   status: string;
   engineerWorkedUserId: string;
@@ -74,6 +77,7 @@ export default function HandoverFormPage({
   params: Promise<{ projectId: string; date: string; shift: string }>;
 }) {
   const { projectId, date, shift } = use(params);
+  const router = useRouter();
   const { data: session } = useSession();
   const [entries, setEntries] = useState<EntryData[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -82,6 +86,7 @@ export default function HandoverFormPage({
   const [leadNotes, setLeadNotes] = useState("");
   const [handoverStatus, setHandoverStatus] = useState("DRAFT");
   const [handoverId, setHandoverId] = useState<string | null>(null);
+  const [handoverUpdatedAt, setHandoverUpdatedAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -104,11 +109,12 @@ export default function HandoverFormPage({
       if (!opts?.silent) setLoading(true);
       try {
         const noStore = { cache: "no-store" as const };
+        const cacheBust = Date.now();
         const [projectsRes, usersRes, handoverRes] = await Promise.all([
           fetch("/api/projects", noStore),
           fetch("/api/users", noStore),
           fetch(
-            `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(shift)}`,
+            `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(shift)}&_t=${cacheBust}`,
             noStore
           ),
         ]);
@@ -151,6 +157,7 @@ export default function HandoverFormPage({
             return {
               clientId: client.id,
               clientName: client.name,
+              sourceUpdatedAt: existing?.updatedAt || null,
               tickets: existing?.tickets || "",
               status: existing?.status || "NA",
               engineerWorkedUserId: existing?.engineerWorkedUserId || "",
@@ -171,6 +178,7 @@ export default function HandoverFormPage({
             setLeadNotes(handoverData.leadNotes || "");
             setHandoverStatus(handoverData.status || "DRAFT");
             setHandoverId(handoverData.id || null);
+            setHandoverUpdatedAt(handoverData.updatedAt || null);
             setEngineerAck({
               acknowledged: handoverData.engineerAcknowledged || false,
               by: handoverData.engineerAcknowledger?.name || null,
@@ -185,6 +193,7 @@ export default function HandoverFormPage({
             setLeadNotes("");
             setHandoverStatus("DRAFT");
             setHandoverId(null);
+            setHandoverUpdatedAt(null);
             setEngineerAck({ acknowledged: false, by: null, at: null });
             setManagerAck({ acknowledged: false, by: null, at: null });
           }
@@ -193,7 +202,7 @@ export default function HandoverFormPage({
         const prevShift = parseInt(shift, 10) - 1;
         if (prevShift >= 1) {
           const prevRes = await fetch(
-            `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(String(prevShift))}`,
+            `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(String(prevShift))}&_t=${Date.now()}`,
             { cache: "no-store" }
           );
           const prevData = prevRes.ok ? await prevRes.json() : null;
@@ -245,14 +254,17 @@ export default function HandoverFormPage({
     try {
       const res = await fetch("/api/handover", {
         method: "POST",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           date,
           projectId,
           shiftNumber: shift,
+          handoverExpectedUpdatedAt: handoverUpdatedAt,
           leadNotes,
           entries: entries.map((e) => ({
             clientId: e.clientId,
+            expectedUpdatedAt: e.sourceUpdatedAt,
             tickets: e.tickets,
             status: e.status,
             engineerWorkedUserId: e.engineerWorkedUserId || null,
@@ -273,6 +285,7 @@ export default function HandoverFormPage({
       if (res.ok) {
         const data = await res.json();
         await loadHandoverPage({ silent: true });
+        router.refresh();
         const base = submit ? "Submitted successfully!" : "Saved as draft.";
         const warns = Array.isArray(data.syncWarnings) ? data.syncWarnings : [];
         if (warns.length > 0) {
@@ -284,7 +297,16 @@ export default function HandoverFormPage({
         }
       } else {
         const errorData = await res.json().catch(() => null);
-        setSaveMessage(errorData?.error || "Error saving. Please try again.");
+        if (res.status === 409) {
+          await loadHandoverPage({ silent: true });
+          setSaveMessage(
+            typeof errorData?.error === "string"
+              ? `${errorData.error} Latest data has been reloaded. Please review and save again.`
+              : "Someone else updated this handover. Latest data has been reloaded. Please review and save again."
+          );
+        } else {
+          setSaveMessage(errorData?.error || "Error saving. Please try again.");
+        }
       }
     } catch {
       setSaveMessage("Error saving. Please try again.");
@@ -304,12 +326,14 @@ export default function HandoverFormPage({
     try {
       const res = await fetch("/api/handover", {
         method: "PATCH",
+        cache: "no-store",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ handoverId, action }),
       });
 
       if (res.ok) {
         const result = await res.json();
+        router.refresh();
         if (action === "engineer_acknowledge") {
           setEngineerAck({
             acknowledged: true,
