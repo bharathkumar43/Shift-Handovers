@@ -1,5 +1,3 @@
-FROM node:20-alpine AS base
-
 # --- Stage 1: Install dependencies ---
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
@@ -19,8 +17,9 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-# --- Stage 3: Production runner ---
+# --- Stage 3: Production runner --
 FROM base AS runner
+RUN apk add --no-cache openssl
 WORKDIR /app
 
 ENV NODE_ENV=production
