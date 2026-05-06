@@ -180,7 +180,8 @@ export async function GET(req: NextRequest) {
   const fileDatePart = startDate === endDate ? startDate : `${startDate}_to_${endDate}`;
   const filename = `handover-${fileDatePart}.xlsx`;
 
-  return new NextResponse(new Blob([buf]), {
+  const arrayBuf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  return new NextResponse(new Blob([arrayBuf]), {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
