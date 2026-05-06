@@ -13,7 +13,11 @@
       "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/tasks/reorder\")",
       "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/items/[itemId]\")",
       "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/items/bulk\")",
-      "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/issues/[issueId]\")"
+      "Bash(mkdir -p \"c:/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/src/app/api/client-projects/[clientId]/issues/[issueId]\")",
+      "Bash(Get-ChildItem -Recurse -Force)",
+      "Bash(Select-Object FullName)",
+      "PowerShell(cd \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\"; Get-ChildItem -Recurse -Force | Select-Object -ExpandProperty FullName | ForEach-Object { $_ -replace [regex]::Escape\\(\"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\"\\), \".\" })",
+      "PowerShell(cd \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\"; Get-ChildItem -Depth 1 | Where-Object { $_.PSIsContainer -eq $false } | Select-Object -ExpandProperty Name | Sort-Object)"
     ]
   }
 }

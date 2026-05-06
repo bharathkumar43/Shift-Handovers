@@ -298,11 +298,38 @@ export default function HandoverFormPage({
       } else {
         const errorData = await res.json().catch(() => null);
         if (res.status === 409) {
-          await loadHandoverPage({ silent: true });
+          // Refresh only timestamps so the next save can proceed — preserve the user's current edits
+          try {
+            const freshRes = await fetch(
+              `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(shift)}&_t=${Date.now()}`,
+              { cache: "no-store" }
+            );
+            if (freshRes.ok) {
+              const freshData = await freshRes.json();
+              if (freshData?.updatedAt) setHandoverUpdatedAt(freshData.updatedAt);
+              if (freshData?.id) setHandoverId(freshData.id);
+              if (Array.isArray(freshData?.entries)) {
+                const freshByClientId = new Map<string, string>(
+                  freshData.entries.map((e: { client: { id: string }; updatedAt: string }) => [
+                    e.client.id,
+                    e.updatedAt,
+                  ])
+                );
+                setEntries((prev) =>
+                  prev.map((e) => {
+                    const freshTs = freshByClientId.get(e.clientId);
+                    return freshTs ? { ...e, sourceUpdatedAt: freshTs } : e;
+                  })
+                );
+              }
+            }
+          } catch {
+            // ignore — user can still retry with stale timestamps
+          }
           setSaveMessage(
             typeof errorData?.error === "string"
-              ? `${errorData.error} Latest data has been reloaded. Please review and save again.`
-              : "Someone else updated this handover. Latest data has been reloaded. Please review and save again."
+              ? `${errorData.error} Your changes are preserved — please save again.`
+              : "Someone else updated this handover while you were editing. Your changes are preserved — please save again."
           );
         } else {
           setSaveMessage(errorData?.error || "Error saving. Please try again.");
