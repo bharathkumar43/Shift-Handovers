@@ -1,3 +1,5 @@
+FROM node:20-alpine AS base
+
 # --- Stage 1: Install dependencies ---
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
