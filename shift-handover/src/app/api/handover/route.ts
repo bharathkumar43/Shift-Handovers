@@ -3,8 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { dateParamToDbDate } from "@/lib/db-date";
-import { upsertMigrationIssueFromClientEntry } from "@/lib/handover-migration-issue-sync";
-import { upsertMigrationTicketFromClientEntry } from "@/lib/handover-migration-ticket-sync";
 
 /** Prevent CDN/proxy/browser from serving stale handover JSON to different users */
 export const dynamic = "force-dynamic";
@@ -31,18 +29,6 @@ function parseRowTint(v: unknown): "RED" | "AMBER" | "SILVER" | "GREEN" | null {
   if (v === null || v === undefined || v === "") return null;
   if (v === "RED" || v === "AMBER" || v === "SILVER" || v === "GREEN") return v;
   return null;
-}
-
-/** User-facing hint when migration-project sync fails (often stale Prisma client or missing migration). */
-function migrationSyncErrorHint(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (msg.includes("Unknown argument") || msg.includes("Unknown field")) {
-    return "Migration project sync did not run: the Prisma client is out of date. Stop npm run dev, then run npx prisma migrate deploy and npx prisma generate, then start the app again. (Windows: EPERM on generate means the dev server is still running.)";
-  }
-  if (/column .* does not exist|does not exist.*column|P2022/i.test(msg)) {
-    return "Migration project sync failed: database is missing a column. Run npx prisma migrate deploy, then npx prisma generate (dev server stopped).";
-  }
-  return `Migration project sync failed: ${msg.slice(0, 220)}`;
 }
 
 function parseExpectedDate(value: unknown): Date | null {
@@ -143,8 +129,6 @@ export async function POST(req: NextRequest) {
       { status: 403 }
     );
   }
-
-  const syncWarningSet = new Set<string>();
 
   const existingHandover = await prisma.shiftHandover.findUnique({
     where: {
@@ -267,7 +251,7 @@ export async function POST(req: NextRequest) {
 
       const rowTintPayload = isAdmin ? parseRowTint(entry.rowTint) : undefined;
 
-      const savedEntry = await prisma.clientEntry.upsert({
+      await prisma.clientEntry.upsert({
         where: {
           shiftHandoverId_clientId: {
             shiftHandoverId: handover.id,
@@ -307,25 +291,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const handoverEntryIds = await prisma.clientEntry.findMany({
-      where: { shiftHandoverId: handover.id },
-      select: { id: true },
-    });
-    for (const { id: ceId } of handoverEntryIds) {
-      try {
-        await upsertMigrationIssueFromClientEntry(ceId);
-      } catch (e) {
-        console.error("[handover] migration issue sync failed", ceId, e);
-        syncWarningSet.add(migrationSyncErrorHint(e));
-      }
-      try {
-        await upsertMigrationTicketFromClientEntry(ceId);
-      } catch (e) {
-        console.error("[handover] migration ticket sync failed", ceId, e);
-        syncWarningSet.add(migrationSyncErrorHint(e));
-      }
-    }
-
     // Reset acknowledgements when their respective notes change
     const ackReset: Record<string, unknown> = {};
     if (engineerNotesChanged && handover.engineerAcknowledged) {
@@ -362,12 +327,8 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const syncWarnings = [...syncWarningSet];
   if (!result) {
     return json({ error: "Handover not found after save" }, { status: 500 });
-  }
-  if (syncWarnings.length > 0) {
-    return json({ ...result, syncWarnings });
   }
   return json(result);
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, use, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck, ExternalLink } from "lucide-react";
+import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck } from "lucide-react";
 import {
   cn,
   getStatusColor,
@@ -283,18 +283,10 @@ export default function HandoverFormPage({
       });
 
       if (res.ok) {
-        const data = await res.json();
         await loadHandoverPage({ silent: true });
         router.refresh();
-        const base = submit ? "Submitted successfully!" : "Saved as draft.";
-        const warns = Array.isArray(data.syncWarnings) ? data.syncWarnings : [];
-        if (warns.length > 0) {
-          setSaveMessage(`${base}\n\n${warns.join("\n\n")}`);
-          setTimeout(() => setSaveMessage(""), 12000);
-        } else {
-          setSaveMessage(base);
-          setTimeout(() => setSaveMessage(""), 3000);
-        }
+        setSaveMessage(submit ? "Submitted successfully!" : "Saved as draft.");
+        setTimeout(() => setSaveMessage(""), 3000);
       } else {
         const errorData = await res.json().catch(() => null);
         if (res.status === 409) {
@@ -451,9 +443,7 @@ export default function HandoverFormPage({
                 "text-sm px-3 py-2 rounded-lg max-w-xl whitespace-pre-wrap",
                 saveMessage.includes("Error") || saveMessage.includes("Only")
                   ? "bg-red-100 text-red-700"
-                  : saveMessage.includes("Migration project sync")
-                    ? "bg-amber-50 text-amber-900 border border-amber-200"
-                    : "bg-green-100 text-green-700"
+                  : "bg-green-100 text-green-700"
               )}
             >
               {saveMessage}
@@ -613,16 +603,6 @@ export default function HandoverFormPage({
                             />
                           )}
                           <span className="break-words min-w-0">{entry.clientName}</span>
-                          <a
-                            href={`/client-projects/${entry.clientId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="View migration project"
-                            className="shrink-0 text-gray-400 hover:text-indigo-600 transition-colors"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
                         </div>
                         <div className="shrink-0 pt-0.5 border-l border-gray-200 pl-3 ml-0.5">
                           <select

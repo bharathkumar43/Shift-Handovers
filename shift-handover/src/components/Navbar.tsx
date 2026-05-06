@@ -13,14 +13,12 @@ import {
   LogOut,
   User,
   UserCheck,
-  FolderOpen,
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/handover", label: "Shift Handover", icon: ClipboardList },
   { href: "/history", label: "History", icon: History },
-  { href: "/client-projects", label: "Migration Projects", icon: FolderOpen },
 ];
 
 const adminItems = [
@@ -28,7 +26,6 @@ const adminItems = [
   { href: "/admin/users", label: "Manage Users", icon: User },
   { href: "/admin/reports", label: "Reports", icon: BarChart3 },
   { href: "/admin/tracking", label: "Tracking", icon: UserCheck },
-  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function Navbar() {
