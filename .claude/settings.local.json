@@ -22,7 +22,8 @@
       "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\settings\")",
       "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\api\\\\client-projects\")",
       "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\api\\\\migration-types\")",
-      "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\components\\\\client-projects\")"
+      "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\components\\\\client-projects\")",
+      "Bash(git fetch *)"
     ]
   }
 }
