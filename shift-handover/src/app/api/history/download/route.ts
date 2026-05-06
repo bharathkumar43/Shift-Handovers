@@ -175,12 +175,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  const buf: Buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
   const fileDatePart = startDate === endDate ? startDate : `${startDate}_to_${endDate}`;
   const filename = `handover-${fileDatePart}.xlsx`;
 
-  return new NextResponse(buf as Buffer, {
+  return new NextResponse(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength), {
     status: 200,
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
