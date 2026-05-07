@@ -18,7 +18,6 @@ import TicketLinksDisplay from "@/components/TicketLinksDisplay";
 interface Client {
   id: string;
   name: string;
-  productType?: string | null;
 }
 
 interface User {
@@ -30,7 +29,6 @@ interface User {
 interface EntryData {
   clientId: string;
   clientName: string;
-  clientProductType: string | null;
   /** Server row version for optimistic concurrency checks */
   sourceUpdatedAt: string | null;
   tickets: string;
@@ -62,8 +60,8 @@ const STATUS_OPTIONS = [
   { value: "DELTA", label: "Delta" },
 ];
 
-function isEntryFilled(entry: EntryData): boolean {
-  if (entry.clientProductType === "CONTENT") {
+function isEntryFilled(entry: EntryData, isContent: boolean): boolean {
+  if (isContent) {
     return entry.status === "GOOD" || entry.status === "BAD";
   }
   return (
@@ -162,7 +160,6 @@ export default function HandoverFormPage({
             return {
               clientId: client.id,
               clientName: client.name,
-              clientProductType: client.productType ?? null,
               sourceUpdatedAt: existing?.updatedAt || null,
               tickets: existing?.tickets || "",
               status: existing?.status || "NA",
@@ -409,7 +406,8 @@ export default function HandoverFormPage({
 
   const isSubmitted = handoverStatus === "SUBMITTED";
 
-  const filledCount = entries.filter(isEntryFilled).length;
+  const isContentProject = projectName.toLowerCase().includes("content");
+  const filledCount = entries.filter((e) => isEntryFilled(e, isContentProject)).length;
   const totalCount = entries.length;
   const allEntriesFilled = totalCount > 0 && filledCount === totalCount;
 
@@ -579,7 +577,7 @@ export default function HandoverFormPage({
             </thead>
             <tbody>
               {entries.map((entry, idx) => {
-                const filled = isEntryFilled(entry);
+                const filled = isEntryFilled(entry, isContentProject);
                 const rowBg = getRowTintBackgroundClass(entry.rowTint);
                 return (
                   <tr
@@ -669,33 +667,38 @@ export default function HandoverFormPage({
                       )}
                     </td>
                     <td className="px-3 py-2 align-top w-[11rem] max-w-[11rem] min-w-0">
-                      {entry.clientProductType === "CONTENT" ? (
-                        <div>
-                          <button
-                            type="button"
-                            disabled={isSubmitted}
-                            onClick={() => updateEntry(entry.clientId, "status", entry.status === "BAD" ? "GOOD" : "BAD")}
-                            className={cn(
-                              "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed",
-                              entry.status === "BAD"
-                                ? "bg-red-500 focus:ring-red-400"
-                                : "bg-green-500 focus:ring-green-400"
-                            )}
-                            title={entry.status === "BAD" ? "Bad — click to set Good" : "Good — click to set Bad"}
-                          >
-                            <span
-                              className={cn(
-                                "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
-                                entry.status === "BAD" ? "translate-x-6" : "translate-x-1"
-                              )}
-                            />
-                          </button>
-                          <span className={cn(
-                            "block text-[11px] font-medium mt-0.5",
-                            entry.status === "BAD" ? "text-red-600" : "text-green-600"
-                          )}>
-                            {entry.status === "BAD" ? "Bad" : "Good"}
+                      {isContentProject ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                            Drive Changes
                           </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={isSubmitted}
+                              onClick={() => updateEntry(entry.clientId, "status", entry.status === "BAD" ? "GOOD" : "BAD")}
+                              className={cn(
+                                "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed",
+                                entry.status === "BAD"
+                                  ? "bg-red-500 focus:ring-red-400"
+                                  : "bg-gray-300 focus:ring-gray-400"
+                              )}
+                              title={entry.status === "BAD" ? "On (Bad) — click to turn Off" : "Off — click to turn On (Bad)"}
+                            >
+                              <span
+                                className={cn(
+                                  "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                                  entry.status === "BAD" ? "translate-x-6" : "translate-x-1"
+                                )}
+                              />
+                            </button>
+                            <span className={cn(
+                              "text-[11px] font-medium",
+                              entry.status === "BAD" ? "text-red-600" : "text-gray-400"
+                            )}>
+                              {entry.status === "BAD" ? "Bad" : "Good"}
+                            </span>
+                          </div>
                         </div>
                       ) : (
                         <select
@@ -703,7 +706,7 @@ export default function HandoverFormPage({
                           onChange={(e) => updateEntry(entry.clientId, "status", e.target.value)}
                           disabled={isSubmitted}
                           className={cn(
-                            "box-border w-full min-w-0 max-w-full truncate px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:opacity-60",
+                            "box-border w-auto truncate px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:opacity-60",
                             getStatusColor(entry.status)
                           )}
                         >

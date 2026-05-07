@@ -15,8 +15,6 @@ interface Client {
   projectId: string;
   sortOrder: number;
   active: boolean;
-  productType: "CONTENT" | "EMAIL" | "MESSAGE" | null;
-  project: { id: string; name: string };
 }
 
 async function readErrorMessage(res: Response, fallback: string): Promise<string> {
@@ -68,7 +66,7 @@ export default function ManageClientsPage() {
 
     if (res.ok) {
       const client = await res.json();
-      setClients([...clients, { ...client, project: projects.find((p) => p.id === selectedProject) }]);
+      setClients([...clients, client]);
       setNewClientName("");
       setMessage("Client added successfully");
       setTimeout(() => setMessage(""), 3000);
@@ -78,32 +76,18 @@ export default function ManageClientsPage() {
     setAdding(false);
   };
 
-  const setProductType = async (client: Client, productType: string) => {
-    const res = await fetch("/api/clients", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: client.id, productType: productType || null }),
-    });
-    if (res.ok) {
-      setClients((prev) =>
-        prev.map((c) => c.id === client.id ? { ...c, productType: (productType || null) as Client["productType"] } : c)
-      );
-    }
-  };
-
   const toggleClient = async (client: Client) => {
     const res = await fetch("/api/clients", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: client.id, active: !client.active }),
     });
-
     if (res.ok) {
       setClients(clients.map((c) => (c.id === client.id ? { ...c, active: !c.active } : c)));
     }
   };
 
-const deleteClient = async (client: Client) => {
+  const deleteClient = async (client: Client) => {
     const res = await fetch(`/api/clients?id=${client.id}`, { method: "DELETE" });
     if (res.ok) {
       setClients((prev) => prev.filter((c) => c.id !== client.id));
@@ -191,7 +175,6 @@ const deleteClient = async (client: Client) => {
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="text-left px-6 py-3 font-semibold text-gray-700">#</th>
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Client Name</th>
-              <th className="text-left px-6 py-3 font-semibold text-gray-700">Product Type</th>
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Status</th>
               <th className="text-right px-6 py-3 font-semibold text-gray-700">Actions</th>
             </tr>
@@ -202,24 +185,10 @@ const deleteClient = async (client: Client) => {
                 <td className="px-6 py-3 text-gray-500">{idx + 1}</td>
                 <td className="px-6 py-3 font-medium text-gray-900">{client.name}</td>
                 <td className="px-6 py-3">
-                  <select
-                    value={client.productType ?? ""}
-                    onChange={(e) => setProductType(client, e.target.value)}
-                    className="px-2 py-1 border border-gray-200 rounded text-xs text-gray-700 focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="">— None —</option>
-                    <option value="CONTENT">Content</option>
-                    <option value="EMAIL">Email</option>
-                    <option value="MESSAGE">Message</option>
-                  </select>
-                </td>
-                <td className="px-6 py-3">
                   <span
                     className={cn(
                       "px-2.5 py-1 rounded-full text-xs font-medium",
-                      client.active
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-500"
+                      client.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
                     )}
                   >
                     {client.active ? "Active" : "Inactive"}
@@ -232,19 +201,13 @@ const deleteClient = async (client: Client) => {
                       onClick={() => toggleClient(client)}
                       className={cn(
                         "inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors",
-                        client.active
-                          ? "text-amber-600 hover:bg-amber-50"
-                          : "text-green-600 hover:bg-green-50"
+                        client.active ? "text-amber-600 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"
                       )}
                     >
                       {client.active ? (
-                        <>
-                          <ToggleRight className="w-4 h-4" /> Deactivate
-                        </>
+                        <><ToggleRight className="w-4 h-4" /> Deactivate</>
                       ) : (
-                        <>
-                          <ToggleLeft className="w-4 h-4" /> Activate
-                        </>
+                        <><ToggleLeft className="w-4 h-4" /> Activate</>
                       )}
                     </button>
                     {deleteConfirm === client.id ? (
