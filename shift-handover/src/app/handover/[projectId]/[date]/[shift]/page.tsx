@@ -69,7 +69,6 @@ function isEntryFilled(entry: EntryData, isContent: boolean): boolean {
     !!entry.tickets ||
     !!entry.engineerWorkedUserId ||
     !!entry.legacyEngineerWorked?.trim() ||
-    !!entry.updates ||
     !!entry.issues
   );
 }
@@ -407,7 +406,7 @@ export default function HandoverFormPage({
   const isSubmitted = handoverStatus === "SUBMITTED";
 
   const isContentProject = projectName.toLowerCase().includes("content");
-  const filledCount = entries.filter((e) => isEntryFilled(e, isContentProject)).length;
+  const filledCount = entries.filter((e) => !!e.handoverNotes.trim()).length;
   const totalCount = entries.length;
   const allEntriesFilled = totalCount > 0 && filledCount === totalCount;
 
@@ -560,9 +559,6 @@ export default function HandoverFormPage({
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
                   Issues
-                </th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
-                  Updates
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
                   Engineer Notes
@@ -757,16 +753,6 @@ export default function HandoverFormPage({
                         rows={1}
                         className="box-border w-full min-w-0 max-w-full min-h-[2.5rem] [field-sizing:content] px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 resize-y text-gray-900 break-words"
                         placeholder="Any issues..."
-                      />
-                    </td>
-                    <td className="px-3 py-2 align-top max-w-[22rem] min-w-0">
-                      <textarea
-                        value={entry.updates}
-                        onChange={(e) => updateEntry(entry.clientId, "updates", e.target.value)}
-                        disabled={isSubmitted}
-                        rows={1}
-                        className="box-border w-full min-w-0 max-w-full min-h-[2.5rem] [field-sizing:content] px-2 py-1.5 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-gray-100 resize-y text-gray-900 break-words"
-                        placeholder="Updates..."
                       />
                     </td>
                     <td className="px-3 py-2 align-top max-w-[22rem] min-w-0">
