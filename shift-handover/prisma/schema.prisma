@@ -71,12 +71,11 @@ model Project {
 }
 
 model Client {
-  id          String       @id @default(cuid())
-  name        String
-  projectId   String
-  sortOrder   Int          @default(0)
-  active      Boolean      @default(true)
-  productType ProductType?
+  id        String  @id @default(cuid())
+  name      String
+  projectId String
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
 
   project          Project           @relation(fields: [projectId], references: [id])
   entries          ClientEntry[]
