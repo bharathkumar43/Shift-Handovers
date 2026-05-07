@@ -555,7 +555,7 @@ export default function HandoverFormPage({
                   Tickets
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
-                  Status / Drive Changes
+                  Status
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[14rem] min-w-0">
                   Engineer Worked
@@ -668,7 +668,7 @@ export default function HandoverFormPage({
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 align-top max-w-[11rem] min-w-0">
+                    <td className="px-3 py-2 align-top w-[11rem] max-w-[11rem] min-w-0">
                       {entry.clientProductType === "CONTENT" ? (
                         <div>
                           <button
