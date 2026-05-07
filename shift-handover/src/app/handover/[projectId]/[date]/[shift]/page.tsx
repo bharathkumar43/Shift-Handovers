@@ -18,6 +18,7 @@ import TicketLinksDisplay from "@/components/TicketLinksDisplay";
 interface Client {
   id: string;
   name: string;
+  productType?: string | null;
 }
 
 interface User {
@@ -29,6 +30,7 @@ interface User {
 interface EntryData {
   clientId: string;
   clientName: string;
+  clientProductType: string | null;
   /** Server row version for optimistic concurrency checks */
   sourceUpdatedAt: string | null;
   tickets: string;
@@ -61,6 +63,9 @@ const STATUS_OPTIONS = [
 ];
 
 function isEntryFilled(entry: EntryData): boolean {
+  if (entry.clientProductType === "CONTENT") {
+    return entry.status === "GOOD" || entry.status === "BAD";
+  }
   return (
     entry.status !== "NA" ||
     !!entry.tickets ||
@@ -157,6 +162,7 @@ export default function HandoverFormPage({
             return {
               clientId: client.id,
               clientName: client.name,
+              clientProductType: client.productType ?? null,
               sourceUpdatedAt: existing?.updatedAt || null,
               tickets: existing?.tickets || "",
               status: existing?.status || "NA",
@@ -549,7 +555,7 @@ export default function HandoverFormPage({
                   Tickets
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
-                  Status
+                  Status / Drive Changes
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[14rem] min-w-0">
                   Engineer Worked
@@ -663,21 +669,55 @@ export default function HandoverFormPage({
                       )}
                     </td>
                     <td className="px-3 py-2 align-top max-w-[11rem] min-w-0">
-                      <select
-                        value={entry.status}
-                        onChange={(e) => updateEntry(entry.clientId, "status", e.target.value)}
-                        disabled={isSubmitted}
-                        className={cn(
-                          "box-border w-full min-w-0 max-w-full truncate px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:opacity-60",
-                          getStatusColor(entry.status)
-                        )}
-                      >
-                        {STATUS_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
+                      {entry.clientProductType === "CONTENT" ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Drive Changes</span>
+                          <div className="flex rounded-lg overflow-hidden border border-gray-200 w-fit">
+                            <button
+                              type="button"
+                              disabled={isSubmitted}
+                              onClick={() => updateEntry(entry.clientId, "status", entry.status === "GOOD" ? "NA" : "GOOD")}
+                              className={cn(
+                                "px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed",
+                                entry.status === "GOOD"
+                                  ? "bg-green-500 text-white"
+                                  : "bg-white text-gray-500 hover:bg-green-50"
+                              )}
+                            >
+                              Good
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSubmitted}
+                              onClick={() => updateEntry(entry.clientId, "status", entry.status === "BAD" ? "NA" : "BAD")}
+                              className={cn(
+                                "px-3 py-1.5 text-xs font-semibold transition-colors border-l border-gray-200 disabled:cursor-not-allowed",
+                                entry.status === "BAD"
+                                  ? "bg-red-500 text-white"
+                                  : "bg-white text-gray-500 hover:bg-red-50"
+                              )}
+                            >
+                              Bad
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <select
+                          value={entry.status}
+                          onChange={(e) => updateEntry(entry.clientId, "status", e.target.value)}
+                          disabled={isSubmitted}
+                          className={cn(
+                            "box-border w-full min-w-0 max-w-full truncate px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:opacity-60",
+                            getStatusColor(entry.status)
+                          )}
+                        >
+                          {STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td className="px-3 py-2 align-top max-w-[14rem] min-w-0">
                       <div className="space-y-1">

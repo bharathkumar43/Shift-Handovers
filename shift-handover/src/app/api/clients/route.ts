@@ -71,16 +71,22 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, name, active, sortOrder } = body;
+  const { id, name, active, sortOrder, productType } = body;
 
   if (!id) {
     return NextResponse.json({ error: "Client ID required" }, { status: 400 });
+  }
+
+  const VALID_PRODUCT_TYPES = ["CONTENT", "EMAIL", "MESSAGE", null];
+  if (productType !== undefined && !VALID_PRODUCT_TYPES.includes(productType)) {
+    return NextResponse.json({ error: "Invalid productType" }, { status: 400 });
   }
 
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name;
   if (active !== undefined) updateData.active = active;
   if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+  if (productType !== undefined) updateData.productType = productType;
 
   const client = await prisma.client.update({
     where: { id },

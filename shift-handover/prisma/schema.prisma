@@ -19,6 +19,8 @@ enum EntryStatus {
   PENDING
   DELTA
   NA
+  GOOD
+  BAD
 }
 
 enum HandoverStatus {
@@ -69,11 +71,12 @@ model Project {
 }
 
 model Client {
-  id        String  @id @default(cuid())
-  name      String
-  projectId String
-  sortOrder Int     @default(0)
-  active    Boolean @default(true)
+  id          String       @id @default(cuid())
+  name        String
+  projectId   String
+  sortOrder   Int          @default(0)
+  active      Boolean      @default(true)
+  productType ProductType?
 
   project          Project           @relation(fields: [projectId], references: [id])
   entries          ClientEntry[]
