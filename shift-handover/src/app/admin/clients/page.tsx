@@ -15,6 +15,7 @@ interface Client {
   projectId: string;
   sortOrder: number;
   active: boolean;
+  productType: "CONTENT" | "EMAIL" | "MESSAGE" | null;
   project: { id: string; name: string };
 }
 
@@ -75,6 +76,19 @@ export default function ManageClientsPage() {
       setMessage(await readErrorMessage(res, "Error adding client"));
     }
     setAdding(false);
+  };
+
+  const setProductType = async (client: Client, productType: string) => {
+    const res = await fetch("/api/clients", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: client.id, productType: productType || null }),
+    });
+    if (res.ok) {
+      setClients((prev) =>
+        prev.map((c) => c.id === client.id ? { ...c, productType: (productType || null) as Client["productType"] } : c)
+      );
+    }
   };
 
   const toggleClient = async (client: Client) => {
@@ -177,6 +191,7 @@ const deleteClient = async (client: Client) => {
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="text-left px-6 py-3 font-semibold text-gray-700">#</th>
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Client Name</th>
+              <th className="text-left px-6 py-3 font-semibold text-gray-700">Product Type</th>
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Status</th>
               <th className="text-right px-6 py-3 font-semibold text-gray-700">Actions</th>
             </tr>
@@ -186,6 +201,18 @@ const deleteClient = async (client: Client) => {
               <tr key={client.id} className="border-b border-gray-100 hover:bg-gray-50">
                 <td className="px-6 py-3 text-gray-500">{idx + 1}</td>
                 <td className="px-6 py-3 font-medium text-gray-900">{client.name}</td>
+                <td className="px-6 py-3">
+                  <select
+                    value={client.productType ?? ""}
+                    onChange={(e) => setProductType(client, e.target.value)}
+                    className="px-2 py-1 border border-gray-200 rounded text-xs text-gray-700 focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">— None —</option>
+                    <option value="CONTENT">Content</option>
+                    <option value="EMAIL">Email</option>
+                    <option value="MESSAGE">Message</option>
+                  </select>
+                </td>
                 <td className="px-6 py-3">
                   <span
                     className={cn(

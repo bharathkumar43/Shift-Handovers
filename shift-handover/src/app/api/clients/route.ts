@@ -71,7 +71,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, name, active, sortOrder } = body;
+  const { id, name, active, sortOrder, productType } = body;
 
   if (!id) {
     return NextResponse.json({ error: "Client ID required" }, { status: 400 });
@@ -81,6 +81,7 @@ export async function PUT(req: NextRequest) {
   if (name !== undefined) updateData.name = name;
   if (active !== undefined) updateData.active = active;
   if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+  if (productType !== undefined) updateData.productType = productType || null;
 
   const client = await prisma.client.update({
     where: { id },

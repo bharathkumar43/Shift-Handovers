@@ -18,6 +18,7 @@ import TicketLinksDisplay from "@/components/TicketLinksDisplay";
 interface Client {
   id: string;
   name: string;
+  productType?: string | null;
 }
 
 interface User {
@@ -29,6 +30,7 @@ interface User {
 interface EntryData {
   clientId: string;
   clientName: string;
+  clientProductType: string | null;
   /** Server row version for optimistic concurrency checks */
   sourceUpdatedAt: string | null;
   tickets: string;
@@ -61,9 +63,11 @@ const STATUS_OPTIONS = [
 ];
 
 function isEntryFilled(entry: EntryData): boolean {
+  if (entry.clientProductType === "CONTENT") {
+    return entry.status === "GOOD" || entry.status === "BAD";
+  }
   return (
-    entry.status === "GOOD" ||
-    entry.status === "BAD" ||
+    entry.status !== "NA" ||
     !!entry.tickets ||
     !!entry.engineerWorkedUserId ||
     !!entry.legacyEngineerWorked?.trim() ||
@@ -158,6 +162,7 @@ export default function HandoverFormPage({
             return {
               clientId: client.id,
               clientName: client.name,
+              clientProductType: client.productType ?? null,
               sourceUpdatedAt: existing?.updatedAt || null,
               tickets: existing?.tickets || "",
               status: existing?.status || "NA",
@@ -549,8 +554,8 @@ export default function HandoverFormPage({
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
                   Tickets
                 </th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[10rem] min-w-0">
-                  Drive Changes
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
+                  Status / Drive Changes
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[14rem] min-w-0">
                   Engineer Worked
@@ -663,32 +668,52 @@ export default function HandoverFormPage({
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 align-top max-w-[10rem] min-w-0">
-                      <button
-                        type="button"
-                        disabled={isSubmitted}
-                        onClick={() => updateEntry(entry.clientId, "status", entry.status === "BAD" ? "GOOD" : "BAD")}
-                        className={cn(
-                          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed",
-                          entry.status === "BAD"
-                            ? "bg-red-500 focus:ring-red-400"
-                            : "bg-green-500 focus:ring-green-400"
-                        )}
-                        title={entry.status === "BAD" ? "Bad — click to set Good" : "Good — click to set Bad"}
-                      >
-                        <span
+                    <td className="px-3 py-2 align-top max-w-[11rem] min-w-0">
+                      {entry.clientProductType === "CONTENT" ? (
+                        <div>
+                          <button
+                            type="button"
+                            disabled={isSubmitted}
+                            onClick={() => updateEntry(entry.clientId, "status", entry.status === "BAD" ? "GOOD" : "BAD")}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed",
+                              entry.status === "BAD"
+                                ? "bg-red-500 focus:ring-red-400"
+                                : "bg-green-500 focus:ring-green-400"
+                            )}
+                            title={entry.status === "BAD" ? "Bad — click to set Good" : "Good — click to set Bad"}
+                          >
+                            <span
+                              className={cn(
+                                "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                                entry.status === "BAD" ? "translate-x-6" : "translate-x-1"
+                              )}
+                            />
+                          </button>
+                          <span className={cn(
+                            "block text-[11px] font-medium mt-0.5",
+                            entry.status === "BAD" ? "text-red-600" : "text-green-600"
+                          )}>
+                            {entry.status === "BAD" ? "Bad" : "Good"}
+                          </span>
+                        </div>
+                      ) : (
+                        <select
+                          value={entry.status}
+                          onChange={(e) => updateEntry(entry.clientId, "status", e.target.value)}
+                          disabled={isSubmitted}
                           className={cn(
-                            "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
-                            entry.status === "BAD" ? "translate-x-6" : "translate-x-1"
+                            "box-border w-full min-w-0 max-w-full truncate px-2 py-1.5 border rounded text-sm focus:ring-1 focus:ring-indigo-500 disabled:opacity-60",
+                            getStatusColor(entry.status)
                           )}
-                        />
-                      </button>
-                      <span className={cn(
-                        "block text-[11px] font-medium mt-0.5",
-                        entry.status === "BAD" ? "text-red-600" : "text-green-600"
-                      )}>
-                        {entry.status === "BAD" ? "Bad" : "Good"}
-                      </span>
+                        >
+                          {STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td className="px-3 py-2 align-top max-w-[14rem] min-w-0">
                       <div className="space-y-1">
