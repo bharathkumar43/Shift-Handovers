@@ -820,19 +820,14 @@ export default function HandoverFormPage({
 
       {/* Acknowledgement Section */}
       {(() => {
-        const engineerNotesFilled = totalCount > 0 && entries.every((e) => !!e.handoverNotes);
-        const managerNotesFilled = totalCount > 0 && entries.every((e) => !!e.managerNotes);
-        const engineerNotesFilledCount = entries.filter((e) => !!e.handoverNotes).length;
-        const managerNotesFilledCount = entries.filter((e) => !!e.managerNotes).length;
-
+        const engineerNotesFilled = entries.length > 0 && entries.every((e) => !!e.handoverNotes?.trim());
+        const engineerFilledCount = entries.filter((e) => !!e.handoverNotes?.trim()).length;
         return (
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Engineer Acknowledgement - only Leads can acknowledge */}
+            {/* Engineer Acknowledgement */}
             <div className={cn(
               "rounded-xl shadow-sm border p-5",
-              engineerAck.acknowledged
-                ? "bg-green-50 border-green-200"
-                : "bg-white border-gray-200"
+              engineerAck.acknowledged ? "bg-green-50 border-green-200" : "bg-white border-gray-200"
             )}>
               <div className="flex items-center justify-between">
                 <div>
@@ -848,7 +843,7 @@ export default function HandoverFormPage({
                     <p className="text-xs text-gray-500 mt-1">
                       {engineerNotesFilled
                         ? "All engineer notes filled. Ready to acknowledge."
-                        : `${engineerNotesFilledCount}/${totalCount} engineer notes filled. All must be filled to acknowledge.`}
+                        : `${engineerFilledCount}/${entries.length} engineer notes filled. Fill all to acknowledge.`}
                     </p>
                   ) : (
                     <p className="text-xs text-gray-500 mt-1">Only Shift Leads and Admins can acknowledge</p>
@@ -862,7 +857,7 @@ export default function HandoverFormPage({
                   <button
                     onClick={() => handleAcknowledge("engineer_acknowledge")}
                     disabled={acknowledging || !engineerNotesFilled}
-                    title={!engineerNotesFilled ? "All engineer notes must be filled first" : "Acknowledge engineer notes"}
+                    title={!engineerNotesFilled ? `${engineerFilledCount}/${entries.length} engineer notes filled` : "Acknowledge"}
                     className={cn(
                       "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50",
                       engineerNotesFilled
@@ -877,12 +872,10 @@ export default function HandoverFormPage({
               </div>
             </div>
 
-            {/* Manager Acknowledgement - only Admins can acknowledge */}
+            {/* Manager Acknowledgement */}
             <div className={cn(
               "rounded-xl shadow-sm border p-5",
-              managerAck.acknowledged
-                ? "bg-green-50 border-green-200"
-                : "bg-white border-gray-200"
+              managerAck.acknowledged ? "bg-green-50 border-green-200" : "bg-white border-gray-200"
             )}>
               <div className="flex items-center justify-between">
                 <div>
@@ -895,11 +888,7 @@ export default function HandoverFormPage({
                       Acknowledged by <span className="font-medium">{managerAck.by}</span> on {formatAckTime(managerAck.at)}
                     </p>
                   ) : isAdmin ? (
-                    <p className="text-xs text-gray-500 mt-1">
-                      {managerNotesFilled
-                        ? "All manager notes filled. Ready to acknowledge."
-                        : `${managerNotesFilledCount}/${totalCount} manager notes filled. All must be filled to acknowledge.`}
-                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Ready to acknowledge.</p>
                   ) : (
                     <p className="text-xs text-gray-500 mt-1">Only Managers can acknowledge</p>
                   )}
@@ -911,14 +900,8 @@ export default function HandoverFormPage({
                 ) : isAdmin && handoverId ? (
                   <button
                     onClick={() => handleAcknowledge("manager_acknowledge")}
-                    disabled={acknowledging || !managerNotesFilled}
-                    title={!managerNotesFilled ? "All manager notes must be filled first" : "Acknowledge manager notes"}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50",
-                      managerNotesFilled
-                        ? "bg-purple-600 text-white hover:bg-purple-700"
-                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    )}
+                    disabled={acknowledging}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
                   >
                     {acknowledging ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                     Acknowledge
