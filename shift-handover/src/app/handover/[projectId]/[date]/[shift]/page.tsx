@@ -43,6 +43,7 @@ interface EntryData {
   /** RED | AMBER | SILVER | GREEN | "" — admin-only; tints full row */
   rowTint: string;
   engineerId: string;
+  migrationReportSent: boolean;
 }
 
 interface PreviousEntry {
@@ -172,6 +173,7 @@ export default function HandoverFormPage({
               managerNotes: existing?.managerNotes || "",
               rowTint: existing?.rowTint || "",
               engineerId: existing?.engineerId || "",
+              migrationReportSent: existing?.migrationReportSent ?? false,
             };
           });
           setEntries(clientEntries);
@@ -243,7 +245,7 @@ export default function HandoverFormPage({
     loadHandoverPage();
   }, [loadHandoverPage]);
 
-  const updateEntry = useCallback((clientId: string, field: string, value: string) => {
+  const updateEntry = useCallback((clientId: string, field: string, value: string | boolean) => {
     setEntries((prev) =>
       prev.map((e) => (e.clientId === clientId ? { ...e, [field]: value } : e))
     );
@@ -279,6 +281,7 @@ export default function HandoverFormPage({
             managerNotes: e.managerNotes,
             rowTint: e.rowTint || null,
             engineerId: e.engineerId || null,
+            migrationReportSent: e.migrationReportSent,
           })),
           submit,
         }),
@@ -552,7 +555,10 @@ export default function HandoverFormPage({
                   Tickets
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
-                  Status
+                  {isContentProject ? "Drive Changes" : "Status"}
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
+                  Migration Report
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[14rem] min-w-0">
                   Engineer Worked
@@ -713,6 +719,35 @@ export default function HandoverFormPage({
                           ))}
                         </select>
                       )}
+                    </td>
+                    <td className="px-3 py-2 align-top w-[11rem] max-w-[11rem] min-w-0">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isSubmitted}
+                          onClick={() => updateEntry(entry.clientId, "migrationReportSent", !entry.migrationReportSent)}
+                          className={cn(
+                            "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed",
+                            entry.migrationReportSent
+                              ? "bg-green-500 focus:ring-green-400"
+                              : "bg-gray-300 focus:ring-gray-400"
+                          )}
+                          title={entry.migrationReportSent ? "Report sent — click to toggle off" : "Report not sent — click to toggle on"}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                              entry.migrationReportSent ? "translate-x-6" : "translate-x-1"
+                            )}
+                          />
+                        </button>
+                        <span className={cn(
+                          "text-[11px] font-medium",
+                          entry.migrationReportSent ? "text-green-600" : "text-gray-400"
+                        )}>
+                          {entry.migrationReportSent ? "Sent" : "Not Sent"}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-3 py-2 align-top max-w-[14rem] min-w-0">
                       <div className="space-y-1">

@@ -270,6 +270,7 @@ export async function POST(req: NextRequest) {
           managerNotes: entry.managerNotes || null,
           ...(isAdmin ? { rowTint: rowTintPayload } : {}),
           engineerId: entry.engineerId || null,
+          migrationReportSent: entry.migrationReportSent ?? false,
           filledById,
         },
         create: {
@@ -286,6 +287,7 @@ export async function POST(req: NextRequest) {
           managerNotes: entry.managerNotes || null,
           rowTint: isAdmin ? rowTintPayload : null,
           engineerId: entry.engineerId || null,
+          migrationReportSent: entry.migrationReportSent ?? false,
           filledById,
         },
       });

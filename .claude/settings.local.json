@@ -31,7 +31,8 @@
       "PowerShell(New-Item -ItemType Directory -Path \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\prisma\\\\migrations\\\\20260508120000_client_product_type\" -Force)",
       "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\admin\\\\projects\")",
       "Bash(Remove-Item -Recurse -Force \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\prisma\\\\migrations\\\\20260508140000_project_product_type\")",
-      "PowerShell(New-Item -ItemType Directory -Path \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\prisma\\\\migrations\\\\20260508150000_project_product_type\" -Force)"
+      "PowerShell(New-Item -ItemType Directory -Path \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\prisma\\\\migrations\\\\20260508150000_project_product_type\" -Force)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\" -Recurse -Name)"
     ]
   }
 }

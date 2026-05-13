@@ -130,6 +130,7 @@ model ClientEntry {
   rowTint                RowTint?
   engineerId             String?
   filledById             String?
+  migrationReportSent    Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
