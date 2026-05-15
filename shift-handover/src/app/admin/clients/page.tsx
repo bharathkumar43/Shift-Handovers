@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Settings, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,8 @@ async function readErrorMessage(res: Response, fallback: string): Promise<string
 }
 
 export default function ManageClientsPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedProject, setSelectedProject] = useState("");
@@ -167,7 +170,8 @@ export default function ManageClientsPage() {
 
       {/* Clients List */}
       <p className="text-xs text-gray-500 mb-2">
-        Deactivate hides the client from new handovers. Delete permanently removes the client and its entries from all handovers.
+        Deactivate hides the client from new handovers.{" "}
+        {isAdmin && "Delete permanently removes the client and its entries from all handovers."}
       </p>
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full text-sm">
@@ -210,31 +214,33 @@ export default function ManageClientsPage() {
                         <><ToggleLeft className="w-4 h-4" /> Activate</>
                       )}
                     </button>
-                    {deleteConfirm === client.id ? (
-                      <div className="flex items-center gap-1">
+                    {isAdmin && (
+                      deleteConfirm === client.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => deleteClient(client)}
+                            className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          >
+                            Confirm
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirm(null)}
+                            className="inline-flex items-center text-xs font-medium px-2 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           type="button"
-                          onClick={() => deleteClient(client)}
-                          className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          onClick={() => setDeleteConfirm(client.id)}
+                          className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
                         >
-                          Confirm
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteConfirm(null)}
-                          className="inline-flex items-center text-xs font-medium px-2 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirm(client.id)}
-                        className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Delete
-                      </button>
+                      )
                     )}
                   </div>
                 </td>

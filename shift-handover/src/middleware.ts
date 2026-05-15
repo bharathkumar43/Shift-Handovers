@@ -12,8 +12,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (pathname.startsWith("/admin") && token.role !== "ADMIN") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+  const isAdmin = token.role === "ADMIN";
+  const isLead = token.role === "LEAD";
+
+  if (pathname.startsWith("/admin")) {
+    const leadAllowed = pathname.startsWith("/admin/clients") || pathname.startsWith("/admin/users");
+    if (!isAdmin && !(isLead && leadAllowed)) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
   }
 
   return NextResponse.next();

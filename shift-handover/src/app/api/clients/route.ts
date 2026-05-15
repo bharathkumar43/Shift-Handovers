@@ -37,7 +37,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "ADMIN") {
+  const role = session?.user?.role;
+  if (!session || (role !== "ADMIN" && role !== "LEAD")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -66,7 +67,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "ADMIN") {
+  const role = session?.user?.role;
+  if (!session || (role !== "ADMIN" && role !== "LEAD")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

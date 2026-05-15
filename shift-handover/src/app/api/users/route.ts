@@ -37,12 +37,13 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "ADMIN") {
+  const sessionRole = session?.user?.role;
+  if (!session || (sessionRole !== "ADMIN" && sessionRole !== "LEAD")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await req.json();
-  const { name, email, password, role, assignedShifts } = body;
+  const { name, email, password, role: newRole, assignedShifts } = body;
 
   if (!name || !email || !password) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
       name,
       email,
       password: hashedPassword,
-      role: role || "ENGINEER",
+      role: newRole || "ENGINEER",
       assignedShifts: shifts,
     },
     select: {
@@ -83,12 +84,13 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "ADMIN") {
+  const sessionRole = session?.user?.role;
+  if (!session || (sessionRole !== "ADMIN" && sessionRole !== "LEAD")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await req.json();
-  const { id, name, email, role, active, password, assignedShifts } = body;
+  const { id, name, email, role: updatedRole, active, password, assignedShifts } = body;
 
   if (!id) {
     return NextResponse.json({ error: "User ID required" }, { status: 400 });
@@ -97,7 +99,7 @@ export async function PUT(req: NextRequest) {
   const updateData: Record<string, unknown> = {};
   if (name !== undefined) updateData.name = name;
   if (email !== undefined) updateData.email = email;
-  if (role !== undefined) updateData.role = role;
+  if (updatedRole !== undefined) updateData.role = updatedRole;
   if (active !== undefined) updateData.active = active;
   if (password) updateData.password = await bcrypt.hash(password, 10);
   if (assignedShifts !== undefined) {

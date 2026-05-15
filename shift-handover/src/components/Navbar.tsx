@@ -28,6 +28,11 @@ const adminItems = [
   { href: "/admin/tracking", label: "Tracking", icon: UserCheck },
 ];
 
+const leadItems = [
+  { href: "/admin/clients", label: "Manage Clients", icon: Settings },
+  { href: "/admin/users", label: "Manage Users", icon: User },
+];
+
 export default function Navbar() {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -35,6 +40,7 @@ export default function Navbar() {
   if (!session) return null;
 
   const isAdmin = session.user?.role === "ADMIN";
+  const isLead = session.user?.role === "LEAD";
 
   return (
     <nav className="bg-white border-b border-gray-200 shadow-sm">
@@ -66,10 +72,10 @@ export default function Navbar() {
                   </Link>
                 );
               })}
-              {isAdmin && (
+              {(isAdmin || isLead) && (
                 <>
                   <div className="w-px h-6 bg-gray-300 mx-2" />
-                  {adminItems.map((item) => {
+                  {(isAdmin ? adminItems : leadItems).map((item) => {
                     const Icon = item.icon;
                     return (
                       <Link

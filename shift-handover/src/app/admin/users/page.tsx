@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Users, Plus, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { cn, getShiftLabel } from "@/lib/utils";
 
@@ -18,6 +19,8 @@ const ROLES = ["ENGINEER", "LEAD", "ADMIN"];
 const SHIFT_NUMS = [1, 2, 3] as const;
 
 export default function ManageUsersPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -247,7 +250,9 @@ export default function ManageUsersPage() {
       {/* Users Table */}
       <p className="text-xs text-gray-500 mb-2">
         <strong className="text-gray-600">Deactivate</strong> blocks sign-in but keeps the account.{" "}
-        <strong className="text-gray-600">Delete</strong> permanently removes the user (you cannot delete your own account).
+        {isAdmin && (
+          <><strong className="text-gray-600">Delete</strong> permanently removes the user (you cannot delete your own account).</>
+        )}
       </p>
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[720px]">
@@ -259,7 +264,10 @@ export default function ManageUsersPage() {
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Shifts</th>
               <th className="text-left px-6 py-3 font-semibold text-gray-700">Status</th>
               <th className="text-right px-6 py-3 font-semibold text-gray-700 whitespace-nowrap">
-                Actions <span className="font-normal text-gray-400">(deactivate / delete)</span>
+                Actions{" "}
+                <span className="font-normal text-gray-400">
+                  {isAdmin ? "(deactivate / delete)" : "(deactivate)"}
+                </span>
               </th>
             </tr>
           </thead>
@@ -335,34 +343,36 @@ export default function ManageUsersPage() {
                         </>
                       )}
                     </button>
-                    {deleteConfirm === user.id ? (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-gray-500 mr-1 hidden sm:inline">Delete user?</span>
+                    {isAdmin && (
+                      deleteConfirm === user.id ? (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-xs text-gray-500 mr-1 hidden sm:inline">Delete user?</span>
+                          <button
+                            type="button"
+                            onClick={() => deleteUser(user)}
+                            className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          >
+                            Confirm delete
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirm(null)}
+                            className="inline-flex items-center text-xs font-medium px-2 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           type="button"
-                          onClick={() => deleteUser(user)}
-                          className="inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          onClick={() => setDeleteConfirm(user.id)}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors shrink-0"
+                          title="Permanently delete this user"
                         >
-                          Confirm delete
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteConfirm(null)}
-                          className="inline-flex items-center text-xs font-medium px-2 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirm(user.id)}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors shrink-0"
-                        title="Permanently delete this user"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Delete
-                      </button>
+                      )
                     )}
                   </div>
                 </td>
