@@ -131,6 +131,7 @@ model ClientEntry {
   engineerId             String?
   filledById             String?
   migrationReportSent    Boolean  @default(false)
+  driveChangesAlerts     Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 

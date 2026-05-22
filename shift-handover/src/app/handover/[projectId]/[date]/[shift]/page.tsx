@@ -44,6 +44,7 @@ interface EntryData {
   rowTint: string;
   engineerId: string;
   migrationReportSent: boolean;
+  driveChangesAlerts: boolean;
 }
 
 interface PreviousEntry {
@@ -174,6 +175,7 @@ export default function HandoverFormPage({
               rowTint: existing?.rowTint || "",
               engineerId: existing?.engineerId || "",
               migrationReportSent: existing?.migrationReportSent ?? false,
+              driveChangesAlerts: existing?.driveChangesAlerts ?? false,
             };
           });
           setEntries(clientEntries);
@@ -282,6 +284,7 @@ export default function HandoverFormPage({
             rowTint: e.rowTint || null,
             engineerId: e.engineerId || null,
             migrationReportSent: e.migrationReportSent,
+            driveChangesAlerts: e.driveChangesAlerts,
           })),
           submit,
         }),
@@ -409,6 +412,7 @@ export default function HandoverFormPage({
   const isSubmitted = handoverStatus === "SUBMITTED";
 
   const isContentProject = projectName.toLowerCase().includes("content");
+  const showDriveChangesCol = isContentProject && entries.some((e) => e.driveChangesAlerts);
   const filledCount = entries.filter((e) => !!e.handoverNotes.trim()).length;
   const totalCount = entries.length;
   const allEntriesFilled = totalCount > 0 && filledCount === totalCount;
@@ -554,9 +558,21 @@ export default function HandoverFormPage({
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom max-w-[22rem] min-w-0">
                   Tickets
                 </th>
-                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
-                  {isContentProject ? "Drive Changes" : "Status"}
-                </th>
+                {isContentProject && (
+                  <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[13rem] min-w-0">
+                    Drive Changes Alerts
+                  </th>
+                )}
+                {showDriveChangesCol && (
+                  <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
+                    Drive Changes
+                  </th>
+                )}
+                {!isContentProject && (
+                  <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
+                    Status
+                  </th>
+                )}
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[11rem] min-w-0">
                   Migration Report
                 </th>
@@ -668,12 +684,40 @@ export default function HandoverFormPage({
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 align-top w-[11rem] max-w-[11rem] min-w-0">
-                      {isContentProject ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
-                            Drive Changes
+                    {isContentProject && (
+                      <td className="px-3 py-2 align-top w-[13rem] max-w-[13rem] min-w-0">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={isSubmitted}
+                            onClick={() => updateEntry(entry.clientId, "driveChangesAlerts", !entry.driveChangesAlerts)}
+                            className={cn(
+                              "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed",
+                              entry.driveChangesAlerts
+                                ? "bg-green-500 focus:ring-green-400"
+                                : "bg-gray-300 focus:ring-gray-400"
+                            )}
+                            title={entry.driveChangesAlerts ? "Received — click to toggle off" : "Not received — click to toggle on"}
+                          >
+                            <span
+                              className={cn(
+                                "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                                entry.driveChangesAlerts ? "translate-x-6" : "translate-x-1"
+                              )}
+                            />
+                          </button>
+                          <span className={cn(
+                            "text-[11px] font-medium",
+                            entry.driveChangesAlerts ? "text-green-600" : "text-gray-400"
+                          )}>
+                            {entry.driveChangesAlerts ? "Received" : "Not received"}
                           </span>
+                        </div>
+                      </td>
+                    )}
+                    {showDriveChangesCol && (
+                      <td className="px-3 py-2 align-top w-[11rem] max-w-[11rem] min-w-0">
+                        {entry.driveChangesAlerts ? (
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -685,7 +729,7 @@ export default function HandoverFormPage({
                                   ? "bg-red-500 focus:ring-red-400"
                                   : "bg-gray-300 focus:ring-gray-400"
                               )}
-                              title={entry.status === "BAD" ? "On (Bad) — click to turn Off" : "Off — click to turn On (Bad)"}
+                              title={entry.status === "BAD" ? "Bad — click to toggle" : "Good — click to toggle"}
                             >
                               <span
                                 className={cn(
@@ -701,8 +745,13 @@ export default function HandoverFormPage({
                               {entry.status === "BAD" ? "Bad" : "Good"}
                             </span>
                           </div>
-                        </div>
-                      ) : (
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                    )}
+                    {!isContentProject && (
+                      <td className="px-3 py-2 align-top w-[11rem] max-w-[11rem] min-w-0">
                         <select
                           value={entry.status}
                           onChange={(e) => updateEntry(entry.clientId, "status", e.target.value)}
@@ -718,8 +767,8 @@ export default function HandoverFormPage({
                             </option>
                           ))}
                         </select>
-                      )}
-                    </td>
+                      </td>
+                    )}
                     <td className="px-3 py-2 align-top w-[11rem] max-w-[11rem] min-w-0">
                       <div className="flex items-center gap-2">
                         <button
