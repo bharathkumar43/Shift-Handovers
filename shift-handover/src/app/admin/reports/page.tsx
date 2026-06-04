@@ -24,6 +24,7 @@ interface UserOption {
 interface ClientOption {
   id: string;
   name: string;
+  active: boolean;
   project: { name: string };
 }
 
@@ -39,7 +40,7 @@ interface HandoverEntry {
   rowTint: string | null;
   createdAt: string;
   updatedAt: string;
-  client: { name: string };
+  client: { name: string; active: boolean };
   engineerWorkedBy: { name: string } | null;
   engineer: { name: string } | null;
   filledBy: { name: string } | null;
@@ -209,11 +210,16 @@ export default function AdminReportsPage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 text-gray-900"
                 >
                   <option value="">Select client...</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.project.name})
-                    </option>
-                  ))}
+                  {[...clients]
+                    .sort((a, b) => {
+                      if (a.active !== b.active) return a.active ? -1 : 1;
+                      return a.name.localeCompare(b.name);
+                    })
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.active ? "" : "[Inactive] "}{c.name} ({c.project.name})
+                      </option>
+                    ))}
                 </select>
               </div>
               <div>
@@ -245,6 +251,11 @@ export default function AdminReportsPage() {
             {loading ? "Loading..." : "Search"}
           </button>
         </div>
+        {mode === "client" && clients.some((c) => !c.active) && (
+          <p className="text-[11px] text-amber-600 mt-2">
+            Inactive clients are listed with [Inactive] — their historical data is preserved.
+          </p>
+        )}
       </div>
 
       {/* Results - By Date Mode */}
@@ -302,7 +313,16 @@ export default function AdminReportsPage() {
                           getRowTintBackgroundClass(entry.rowTint) || "hover:bg-gray-50/50"
                         )}
                       >
-                        <td className="px-4 py-2 font-medium text-gray-900">{entry.client.name}</td>
+                        <td className="px-4 py-2 font-medium text-gray-900">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {entry.client.name}
+                            {!entry.client.active && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-200 text-gray-500 whitespace-nowrap">
+                                Inactive
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-2 text-gray-700 align-top max-w-[220px]"><TicketLinksDisplay text={entry.tickets} /></td>
                         <td className="px-4 py-2">
                           <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", getStatusColor(entry.status))}>
@@ -369,7 +389,7 @@ export default function AdminReportsPage() {
                   >
                     <td className="px-4 py-2 text-gray-900 font-medium whitespace-nowrap">
                       {entry.shiftHandover
-                        ? new Date(entry.shiftHandover.date + "T00:00:00").toLocaleDateString("en-US", {
+                        ? new Date(entry.shiftHandover.date.substring(0, 10) + "T00:00:00").toLocaleDateString("en-US", {
                             month: "short",
                             day: "numeric",
                             year: "numeric",
@@ -380,7 +400,16 @@ export default function AdminReportsPage() {
                     <td className="px-4 py-2 text-gray-700">
                       {entry.shiftHandover ? getShiftLabel(entry.shiftHandover.shiftNumber) : "-"}
                     </td>
-                    <td className="px-4 py-2 font-medium text-gray-900">{entry.client.name}</td>
+                    <td className="px-4 py-2 font-medium text-gray-900">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {entry.client.name}
+                        {!entry.client.active && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-200 text-gray-500 whitespace-nowrap">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-2 text-gray-700 align-top max-w-[220px]"><TicketLinksDisplay text={entry.tickets} /></td>
                     <td className="px-4 py-2">
                       <span className={cn("px-2 py-0.5 rounded text-xs font-medium border", getStatusColor(entry.status))}>

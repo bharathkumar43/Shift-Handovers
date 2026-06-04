@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, use, useMemo } from "react";
+import { useEffect, useState, useCallback, use, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck, History, FileText, Upload, Trash2, Download, X } from "lucide-react";
 import {
   cn,
   getStatusColor,
@@ -29,8 +29,6 @@ interface User {
 interface EntryData {
   clientId: string;
   clientName: string;
-  /** Server row version for optimistic concurrency checks */
-  sourceUpdatedAt: string | null;
   tickets: string;
   status: string;
   engineerWorkedUserId: string;
@@ -45,6 +43,8 @@ interface EntryData {
   engineerId: string;
   migrationReportSent: boolean;
   driveChangesAlerts: boolean;
+  /** True when the user has changed this row since last load — only dirty rows are sent on draft saves */
+  isDirty: boolean;
 }
 
 interface PreviousEntry {
@@ -52,6 +52,15 @@ interface PreviousEntry {
   handoverNotes: string;
   status: string;
   updates: string;
+}
+
+interface MOMItem {
+  id: string;
+  filename: string;
+  fileSize: number | null;
+  notes: string | null;
+  createdAt: string;
+  uploadedBy: { id: string; name: string };
 }
 
 const STATUS_OPTIONS = [
@@ -90,7 +99,6 @@ export default function HandoverFormPage({
   const [leadNotes, setLeadNotes] = useState("");
   const [handoverStatus, setHandoverStatus] = useState("DRAFT");
   const [handoverId, setHandoverId] = useState<string | null>(null);
-  const [handoverUpdatedAt, setHandoverUpdatedAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -101,6 +109,16 @@ export default function HandoverFormPage({
   const [acknowledging, setAcknowledging] = useState(false);
   /** Tickets: show one surface — links when not editing; textarea while empty or editing */
   const [ticketsEditClientId, setTicketsEditClientId] = useState<string | null>(null);
+
+  /** MOM modal */
+  const [momModalClient, setMomModalClient] = useState<{ id: string; name: string } | null>(null);
+  const [momList, setMomList] = useState<MOMItem[]>([]);
+  const [momLoading, setMomLoading] = useState(false);
+  const [momUploading, setMomUploading] = useState(false);
+  const [momUploadFile, setMomUploadFile] = useState<File | null>(null);
+  const [momUploadNotes, setMomUploadNotes] = useState("");
+  const [momError, setMomError] = useState("");
+  const momFileRef = useRef<HTMLInputElement>(null);
 
   const userRole = (session?.user as { role?: string })?.role;
   const isAdmin = userRole === "ADMIN";
@@ -161,7 +179,6 @@ export default function HandoverFormPage({
             return {
               clientId: client.id,
               clientName: client.name,
-              sourceUpdatedAt: existing?.updatedAt || null,
               tickets: existing?.tickets || "",
               status: existing?.status || "NA",
               engineerWorkedUserId: existing?.engineerWorkedUserId || "",
@@ -176,6 +193,7 @@ export default function HandoverFormPage({
               engineerId: existing?.engineerId || "",
               migrationReportSent: existing?.migrationReportSent ?? false,
               driveChangesAlerts: existing?.driveChangesAlerts ?? false,
+              isDirty: false,
             };
           });
           setEntries(clientEntries);
@@ -184,7 +202,6 @@ export default function HandoverFormPage({
             setLeadNotes(handoverData.leadNotes || "");
             setHandoverStatus(handoverData.status || "DRAFT");
             setHandoverId(handoverData.id || null);
-            setHandoverUpdatedAt(handoverData.updatedAt || null);
             setEngineerAck({
               acknowledged: handoverData.engineerAcknowledged || false,
               by: handoverData.engineerAcknowledger?.name || null,
@@ -199,7 +216,6 @@ export default function HandoverFormPage({
             setLeadNotes("");
             setHandoverStatus("DRAFT");
             setHandoverId(null);
-            setHandoverUpdatedAt(null);
             setEngineerAck({ acknowledged: false, by: null, at: null });
             setManagerAck({ acknowledged: false, by: null, at: null });
           }
@@ -249,13 +265,17 @@ export default function HandoverFormPage({
 
   const updateEntry = useCallback((clientId: string, field: string, value: string | boolean) => {
     setEntries((prev) =>
-      prev.map((e) => (e.clientId === clientId ? { ...e, [field]: value } : e))
+      prev.map((e) => (e.clientId === clientId ? { ...e, [field]: value, isDirty: true } : e))
     );
   }, []);
 
   const handleSave = async (submit = false) => {
     setSaving(true);
     setSaveMessage("");
+
+    // On submit send every row; on draft send only rows the user actually changed.
+    // This prevents one user's save from overwriting another user's untouched rows.
+    const entriesToSave = submit ? entries : entries.filter((e) => e.isDirty);
 
     try {
       const res = await fetch("/api/handover", {
@@ -266,11 +286,9 @@ export default function HandoverFormPage({
           date,
           projectId,
           shiftNumber: shift,
-          handoverExpectedUpdatedAt: handoverUpdatedAt,
           leadNotes,
-          entries: entries.map((e) => ({
+          entries: entriesToSave.map((e) => ({
             clientId: e.clientId,
-            expectedUpdatedAt: e.sourceUpdatedAt,
             tickets: e.tickets,
             status: e.status,
             engineerWorkedUserId: e.engineerWorkedUserId || null,
@@ -297,43 +315,7 @@ export default function HandoverFormPage({
         setTimeout(() => setSaveMessage(""), 3000);
       } else {
         const errorData = await res.json().catch(() => null);
-        if (res.status === 409) {
-          // Refresh only timestamps so the next save can proceed — preserve the user's current edits
-          try {
-            const freshRes = await fetch(
-              `/api/handover?date=${encodeURIComponent(date)}&projectId=${encodeURIComponent(projectId)}&shiftNumber=${encodeURIComponent(shift)}&_t=${Date.now()}`,
-              { cache: "no-store" }
-            );
-            if (freshRes.ok) {
-              const freshData = await freshRes.json();
-              if (freshData?.updatedAt) setHandoverUpdatedAt(freshData.updatedAt);
-              if (freshData?.id) setHandoverId(freshData.id);
-              if (Array.isArray(freshData?.entries)) {
-                const freshByClientId = new Map<string, string>(
-                  freshData.entries.map((e: { client: { id: string }; updatedAt: string }) => [
-                    e.client.id,
-                    e.updatedAt,
-                  ])
-                );
-                setEntries((prev) =>
-                  prev.map((e) => {
-                    const freshTs = freshByClientId.get(e.clientId);
-                    return freshTs ? { ...e, sourceUpdatedAt: freshTs } : e;
-                  })
-                );
-              }
-            }
-          } catch {
-            // ignore — user can still retry with stale timestamps
-          }
-          setSaveMessage(
-            typeof errorData?.error === "string"
-              ? `${errorData.error} Your changes are preserved — please save again.`
-              : "Someone else updated this handover while you were editing. Your changes are preserved — please save again."
-          );
-        } else {
-          setSaveMessage(errorData?.error || "Error saving. Please try again.");
-        }
+        setSaveMessage(errorData?.error || "Error saving. Please try again.");
       }
     } catch {
       setSaveMessage("Error saving. Please try again.");
@@ -400,6 +382,72 @@ export default function HandoverFormPage({
       .filter((u) => userWorksShift(u.assignedShifts ?? [], nextShiftNum))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [users, nextShiftNum]);
+
+  const openMomModal = async (clientId: string, clientName: string) => {
+    setMomModalClient({ id: clientId, name: clientName });
+    setMomList([]);
+    setMomError("");
+    setMomUploadFile(null);
+    setMomUploadNotes("");
+    setMomLoading(true);
+    try {
+      const res = await fetch(`/api/mom?clientId=${clientId}`, { cache: "no-store" });
+      const data = await res.json();
+      setMomList(Array.isArray(data) ? data : []);
+    } catch {
+      setMomError("Failed to load MOMs.");
+    }
+    setMomLoading(false);
+  };
+
+  const handleMomUpload = async () => {
+    if (!momModalClient || !momUploadFile) return;
+    setMomUploading(true);
+    setMomError("");
+    const form = new FormData();
+    form.append("file", momUploadFile);
+    form.append("clientId", momModalClient.id);
+    form.append("projectId", projectId);
+    if (momUploadNotes.trim()) form.append("notes", momUploadNotes.trim());
+    try {
+      const res = await fetch("/api/mom", { method: "POST", body: form });
+      if (res.ok) {
+        const newMom = await res.json();
+        setMomList((prev) => [newMom, ...prev]);
+        setMomUploadFile(null);
+        setMomUploadNotes("");
+        if (momFileRef.current) momFileRef.current.value = "";
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setMomError(err.error ?? "Upload failed.");
+      }
+    } catch {
+      setMomError("Upload failed. Please try again.");
+    }
+    setMomUploading(false);
+  };
+
+  const handleMomDelete = async (momId: string) => {
+    if (!confirm("Delete this MOM?")) return;
+    try {
+      const res = await fetch(`/api/mom/${momId}`, { method: "DELETE" });
+      if (res.ok) {
+        setMomList((prev) => prev.filter((m) => m.id !== momId));
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setMomError(err.error ?? "Delete failed.");
+      }
+    } catch {
+      setMomError("Delete failed. Please try again.");
+    }
+  };
+
+  const formatFileSize = (bytes: number | null) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   if (loading) {
     return (
@@ -590,6 +638,12 @@ export default function HandoverFormPage({
                 </th>
                 <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap max-w-[14rem] min-w-0">
                   Next Shift Engineer
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap min-w-0">
+                  History
+                </th>
+                <th className="text-left px-3 py-3 font-semibold text-gray-700 align-bottom whitespace-nowrap min-w-0">
+                  MOM
                 </th>
               </tr>
             </thead>
@@ -807,7 +861,7 @@ export default function HandoverFormPage({
                             setEntries((prev) =>
                               prev.map((row) =>
                                 row.clientId === entry.clientId
-                                  ? { ...row, engineerWorkedUserId: v, legacyEngineerWorked: v ? "" : row.legacyEngineerWorked }
+                                  ? { ...row, engineerWorkedUserId: v, legacyEngineerWorked: v ? "" : row.legacyEngineerWorked, isDirty: true }
                                   : row
                               )
                             );
@@ -878,6 +932,33 @@ export default function HandoverFormPage({
                           </option>
                         ))}
                       </select>
+                    </td>
+
+                    {/* History */}
+                    <td className="px-3 py-2 align-top min-w-0">
+                      <a
+                        href={`/history/client/${entry.clientId}?name=${encodeURIComponent(entry.clientName)}&projectId=${projectId}&projectName=${encodeURIComponent(projectName)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors whitespace-nowrap"
+                        title={`View full history for ${entry.clientName}`}
+                      >
+                        <History className="w-3.5 h-3.5" />
+                        View
+                      </a>
+                    </td>
+
+                    {/* MOM */}
+                    <td className="px-3 py-2 align-top min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => openMomModal(entry.clientId, entry.clientName)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 hover:bg-teal-100 transition-colors whitespace-nowrap"
+                        title={`Manage MOMs for ${entry.clientName}`}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        MOM
+                      </button>
                     </td>
                   </tr>
                 );
@@ -996,6 +1077,134 @@ export default function HandoverFormPage({
           </div>
         );
       })()}
+
+      {/* MOM Modal */}
+      {momModalClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">
+                  Minutes of Meeting
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">{momModalClient.name}</p>
+              </div>
+              <button
+                onClick={() => setMomModalClient(null)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+              {momError && (
+                <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{momError}</p>
+              )}
+
+              {/* Existing MOMs */}
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Uploaded MOMs
+                </h3>
+                {momLoading ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="w-5 h-5 animate-spin text-teal-500" />
+                  </div>
+                ) : momList.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-4 text-center">No MOMs uploaded yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {momList.map((m) => (
+                      <div
+                        key={m.id}
+                        className="flex items-start justify-between gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">{m.filename}</p>
+                          {m.notes && (
+                            <p className="text-xs text-gray-500 mt-0.5">{m.notes}</p>
+                          )}
+                          <p className="text-[11px] text-gray-400 mt-0.5">
+                            {new Date(m.createdAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}{" "}
+                            · {m.uploadedBy.name}
+                            {m.fileSize ? ` · ${formatFileSize(m.fileSize)}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a
+                            href={`/api/mom/${m.id}`}
+                            download
+                            className="p-1.5 rounded-lg hover:bg-teal-50 text-teal-600 transition-colors"
+                            title="Download"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </a>
+                          {(isAdmin || m.uploadedBy.id === (session?.user as { id?: string })?.id) && (
+                            <button
+                              type="button"
+                              onClick={() => handleMomDelete(m.id)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 text-red-500 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Upload section */}
+              <div className="border-t border-gray-100 pt-4">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Upload New MOM
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <input
+                      ref={momFileRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.png,.jpg,.jpeg"
+                      onChange={(e) => setMomUploadFile(e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">PDF, Word, Excel, PPT, text, images — max 20 MB</p>
+                  </div>
+                  <textarea
+                    value={momUploadNotes}
+                    onChange={(e) => setMomUploadNotes(e.target.value)}
+                    placeholder="Notes (optional)"
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 resize-none text-gray-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleMomUpload}
+                    disabled={!momUploadFile || momUploading}
+                    className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {momUploading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4" />
+                    )}
+                    {momUploading ? "Uploading…" : "Upload"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Save/Submit */}
       {!isSubmitted && (

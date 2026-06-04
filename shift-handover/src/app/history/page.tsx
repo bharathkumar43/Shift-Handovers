@@ -19,7 +19,7 @@ interface Project {
 
 interface HandoverEntry {
   id: string;
-  client: { name: string };
+  client: { name: string; active: boolean };
   tickets: string | null;
   status: string;
   engineerWorked: string | null;
@@ -258,9 +258,7 @@ export default function HistoryPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {h.entries
-                        .filter((e) => e.status !== "NA" || e.tickets || e.issues || e.updates)
-                        .map((entry) => (
+                      {h.entries.map((entry) => (
                           <tr
                             key={entry.id}
                             className={cn(
@@ -268,7 +266,16 @@ export default function HistoryPage() {
                               getRowTintBackgroundClass(entry.rowTint) || "bg-white"
                             )}
                           >
-                            <td className="px-3 py-2 font-medium text-gray-900">{entry.client.name}</td>
+                            <td className="px-3 py-2 font-medium text-gray-900">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {entry.client.name}
+                                {!entry.client.active && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-200 text-gray-500 whitespace-nowrap">
+                                    Inactive
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-3 py-2 text-gray-700 align-top max-w-[240px]">
                               <TicketLinksDisplay text={entry.tickets} />
                             </td>
