@@ -41,6 +41,8 @@ COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 
+# Create uploads dir here so the named volume inherits nextjs ownership on first mount
+RUN mkdir -p /app/uploads
 RUN chown -R nextjs:nodejs /app
 
 USER nextjs

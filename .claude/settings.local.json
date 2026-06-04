@@ -36,7 +36,9 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\" -Recurse -File)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\" -Recurse -Force)",
-      "Bash(mkdir -p \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\api\\\\clients\\\\[clientId]\" 2>&1; echo \"done\")"
+      "Bash(mkdir -p \"c:\\\\Users\\\\BharathTummaganti\\\\OneDrive - CloudFuze, Inc\\\\Documents\\\\Shift_handover\\\\shift-handover\\\\src\\\\app\\\\api\\\\clients\\\\[clientId]\" 2>&1; echo \"done\")",
+      "Bash(ls -la \"/mnt/c/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/shift-handover/\" 2>/dev/null | head -40)",
+      "Read(//mnt/c/Users/BharathTummaganti/OneDrive - CloudFuze, Inc/Documents/Shift_handover/**)"
     ],
     "additionalDirectories": [
       "c:\\Users\\BharathTummaganti\\OneDrive - CloudFuze, Inc\\Documents\\Shift_handover\\shift-handover\\src\\app\\api\\clients"
