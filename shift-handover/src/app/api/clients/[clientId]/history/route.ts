@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { dateParamToDbDate } from "@/lib/db-date";
 
 export const dynamic = "force-dynamic";
 
@@ -17,11 +18,18 @@ export async function GET(
   const { clientId } = await params;
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("projectId");
+  const startDate = searchParams.get("startDate");
+  const endDate = searchParams.get("endDate");
+
+  const dateFilter: Record<string, Date> = {};
+  if (startDate) dateFilter.gte = dateParamToDbDate(startDate);
+  if (endDate) dateFilter.lte = dateParamToDbDate(endDate);
 
   const where: Record<string, unknown> = {
     entries: { some: { clientId } },
   };
   if (projectId) where.projectId = projectId;
+  if (Object.keys(dateFilter).length > 0) where.date = dateFilter;
 
   const handovers = await prisma.shiftHandover.findMany({
     where,

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, use, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Save, Send, CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, ShieldCheck, History, FileText, Upload, Trash2, Download, X } from "lucide-react";
 import {
@@ -936,16 +937,14 @@ export default function HandoverFormPage({
 
                     {/* History */}
                     <td className="px-3 py-2 align-top min-w-0">
-                      <a
+                      <Link
                         href={`/history/client/${entry.clientId}?name=${encodeURIComponent(entry.clientName)}&projectId=${projectId}&projectName=${encodeURIComponent(projectName)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors whitespace-nowrap"
                         title={`View full history for ${entry.clientName}`}
                       >
                         <History className="w-3.5 h-3.5" />
                         View
-                      </a>
+                      </Link>
                     </td>
 
                     {/* MOM */}

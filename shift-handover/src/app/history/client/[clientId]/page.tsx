@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Loader2, Calendar } from "lucide-react";
+import { ArrowLeft, Loader2, Calendar, Filter } from "lucide-react";
 import {
   cn,
   getShiftLabel,
@@ -58,16 +58,26 @@ export default function ClientHistoryPage({
   const { data: session } = useSession();
   const [handovers, setHandovers] = useState<HandoverRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   const isAdmin = (session?.user as { role?: string })?.role === "ADMIN";
 
-  useEffect(() => {
+  const fetchHistory = (start: string, end: string) => {
+    setLoading(true);
     const url = new URL(`/api/clients/${clientId}/history`, window.location.origin);
     if (projectId) url.searchParams.set("projectId", projectId);
+    if (start) url.searchParams.set("startDate", start);
+    if (end) url.searchParams.set("endDate", end);
     fetch(url.toString(), { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => setHandovers(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchHistory(startDate, endDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, projectId]);
 
   const grouped = handovers.reduce<Record<string, HandoverRecord[]>>((acc, h) => {
@@ -97,9 +107,55 @@ export default function ClientHistoryPage({
         Back
       </button>
 
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-2xl font-bold text-gray-900">{clientName} — History</h1>
         {projectName && <p className="text-sm text-gray-500 mt-1">{projectName}</p>}
+      </div>
+
+      {/* Date range filter */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <span className="text-sm font-medium text-gray-700">Filter by Date</span>
+        </div>
+        <div className="flex items-end gap-3 flex-wrap">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 text-gray-900"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 text-gray-900"
+            />
+          </div>
+          <button
+            onClick={() => fetchHistory(startDate, endDate)}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+          >
+            Search
+          </button>
+          {(startDate || endDate) && (
+            <button
+              onClick={() => {
+                setStartDate("");
+                setEndDate("");
+                fetchHistory("", "");
+              }}
+              className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       {loading ? (
